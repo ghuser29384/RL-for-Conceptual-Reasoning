@@ -53,6 +53,20 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Keep generated validation evidence outside the clean tracked-tree assertion
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/assemble-h11-protected-candidate-v2.sh")
+          text = path.read_text(encoding="utf-8")
+          old = 'test -z "$(git status --porcelain)"\n\ngit push origin HEAD:"$CANDIDATE_BRANCH"'
+          new = 'git diff --quiet\ngit diff --cached --quiet\ntest -z "$(git status --porcelain --untracked-files=all | grep -vE \'^\\?\\? \\.staging-evidence/\' || true)"\n\ngit push origin HEAD:"$CANDIDATE_BRANCH"'
+          if text.count(old) != 1:
+              raise SystemExit("Expected final clean-tree assertion anchor exactly once")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Assemble and validate the exact narrow candidate
         run: bash scripts/assemble-h11-protected-candidate-v2.sh
 
