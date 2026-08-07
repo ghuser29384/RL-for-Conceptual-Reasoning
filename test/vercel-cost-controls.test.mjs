@@ -8,7 +8,7 @@ import {
   isKnownNonRuntimePath,
 } from "../scripts/vercel-ignore-build.mjs";
 
-test("only the designated release-preview branch is eligible through the ignored-build classifier", () => {
+test("only the designated release-preview branch may deploy", () => {
   assert.deepEqual(ALLOWED_VERCEL_BRANCHES, [
     "release/vercel-preview",
   ]);
@@ -81,33 +81,21 @@ test("repository-only changes skip Vercel without weakening approved Preview bui
   );
 });
 
-test("vercel.json explicitly auto-aliases the exact public release to the canonical domains", async () => {
-  const [configText, index] = await Promise.all([
-    readFile(new URL("../vercel.json", import.meta.url), "utf8"),
-    readFile(new URL("../index.html", import.meta.url), "utf8"),
-  ]);
-  const config = JSON.parse(configText);
-
-  assert.deepEqual(
-    Object.keys(config.git.deploymentEnabled).sort(),
-    ["*", "main", "release/vercel-preview"].sort(),
-  );
+test("vercel.json denies every branch except the designated Preview", async () => {
+  const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url)));
   assert.equal(config.git.deploymentEnabled["*"], false);
-  assert.equal(config.git.deploymentEnabled.main, true);
-  assert.equal(config.git.deploymentEnabled["release/vercel-preview"], true);
-  assert.equal(config.github.autoAlias, true);
-  assert.equal(config.buildCommand, "npm run build");
-  assert.equal(Object.hasOwn(config, "ignoreCommand"), false);
-  assert.deepEqual(config.alias, [
-    "www.metaphilosophy.org",
-    "metaphilosophy.org",
-    "www.goodphilosophy.org",
-    "goodphilosophy.org",
-    "www.argumentquality.org",
-    "argumentquality.org",
-    "rlhf-conceptual-reasoning.vercel.app",
-  ]);
-  assert.match(index, /name="metaphilosophy-release-candidate" content="mp-public-voice-20260806-r1"/u);
+  assert.equal(
+    Object.hasOwn(config.git.deploymentEnabled, "main"),
+    false,
+  );
+  assert.equal(
+    config.git.deploymentEnabled["release/vercel-preview"],
+    true,
+  );
+  assert.equal(
+    config.ignoreCommand,
+    "node scripts/vercel-ignore-build.mjs",
+  );
 });
 
 test("GitHub Actions performs QA but never creates automatic Vercel deployments", async () => {
