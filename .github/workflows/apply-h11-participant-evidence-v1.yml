@@ -55,15 +55,12 @@ jobs:
             attributes: true,
             attributeFilter: ["data-kind", "hidden"],
           });'''
-          new = '''const observer = new MutationObserver((records) => {
-            if (records.some((record) => record.type === "childList" && (record.addedNodes.length || record.removedNodes.length))) {
-              queueEnhancement();
-            }
-          });
-          observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-          });'''
+          new = '''const observer = new MutationObserver(() => queueEnhancement());
+          if (workspaceContent) {
+            observer.observe(workspaceContent, {
+              childList: true,
+            });
+          }'''
           if text.count(old) != 1:
               raise SystemExit("participant-readiness observer anchor did not match exactly")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
