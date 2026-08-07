@@ -6,11 +6,35 @@
   "git": {
     "deploymentEnabled": {
       "*": false,
+      "main": true,
       "release/vercel-preview": true
     }
   },
-  "ignoreCommand": "node scripts/vercel-ignore-build.mjs",
   "rewrites": [
+    {
+      "source": "/research",
+      "destination": "/research/index.html"
+    },
+    {
+      "source": "/research/",
+      "destination": "/research/index.html"
+    },
+    {
+      "source": "/workspace",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/workspace/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reference",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reference/",
+      "destination": "/index.html"
+    },
     {
       "source": "/contribute",
       "destination": "/reviewers/closed.html"
@@ -30,6 +54,24 @@
     {
       "source": "/reviewers/index.html",
       "destination": "/reviewers/closed.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/src/assets/LMCA_dataset.pdf",
+      "destination": "https://arxiv.org/pdf/2607.27499",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
     }
   ],
   "functions": {

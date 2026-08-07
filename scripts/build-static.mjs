@@ -4,13 +4,44 @@ import { unpackSyntheticRelease } from "./unpack-synthetic-1000.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const dist = resolve(root, "dist");
+const releasePreviewBranch = "release/vercel-preview";
+const includeStaging =
+  process.env.STAGING_BUILD === "true" ||
+  (process.env.VERCEL === "1" && process.env.VERCEL_GIT_COMMIT_REF === releasePreviewBranch);
+const publicSrcFiles = Object.freeze([
+  "site-entry.mjs",
+  "workspace-gate.mjs",
+  "exact-reference-home.mjs",
+  "wordmark-system.mjs",
+  "styles.css",
+  "brand-system.css",
+  "epoch-system.css",
+  "epoch-core.css",
+  "epoch-platform.css",
+  "epoch-impact.css",
+  "epoch-workspace.css",
+  "epoch-responsive.css",
+  "wordmark-system.css",
+  "exact-reference.css",
+  "trust-home.css",
+  "mobile-navigation.css",
+]);
 
+// Public LMCA links resolve to the paper's canonical arXiv record; no private or attached PDF is copied.
 await unpackSyntheticRelease();
 await rm(dist, { recursive: true, force: true });
-await mkdir(dist, { recursive: true });
+await mkdir(resolve(dist, "src"), { recursive: true });
 await cp(resolve(root, "index.html"), resolve(dist, "index.html"));
-await cp(resolve(root, "src"), resolve(dist, "src"), { recursive: true });
+for (const file of publicSrcFiles) {
+  await cp(resolve(root, "src", file), resolve(dist, "src", file));
+}
 await cp(resolve(root, "reviewers"), resolve(dist, "reviewers"), { recursive: true });
 await cp(resolve(root, "arguments"), resolve(dist, "arguments"), { recursive: true });
+await cp(resolve(root, "research"), resolve(dist, "research"), { recursive: true });
 
-console.log(`Static build written to ${dist}`);
+if (includeStaging) {
+  // The shell contains no protected item; authenticated records remain server-side. It is emitted only for an explicit local staging build or the sole designated Vercel release-preview branch.
+  await cp(resolve(root, "staging"), resolve(dist, "staging"), { recursive: true });
+}
+
+console.log(`Static ${includeStaging ? "controlled-staging" : "public"} build written to ${dist}; ${publicSrcFiles.length} allowlisted public source files copied.`);

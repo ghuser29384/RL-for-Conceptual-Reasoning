@@ -1,0 +1,23 @@
+{
+  "release_id": "synthetic-1000-v1",
+  "title": "Metaphilosophy Synthetic Argument–Critique Library",
+  "released_at": "2026-07-16",
+  "provenance": "Model-authored synthetic expansion; unrated by Metaphilosophy expert raters.",
+  "records": 1000,
+  "positions": 250,
+  "critiques": 1000,
+  "critiques_per_position": 4,
+  "domains": 25,
+  "source_chunks": 24,
+  "source_sha256": "1cb41afee3851c158b520da628a3659c3a387d16c18e6c38f64db1492f59d591",
+  "files": {
+    "positions.json": {
+      "bytes": 112973,
+      "sha256": "35f68251b28aa7d3985453abec27ec8555ab944e709e9016768c266c68ed5d8e"
+    },
+    "critiques.json": {
+      "bytes": 359239,
+      "sha256": "0387d0c8ba94eae78d4fddaae9f8d337c090583d05d4d41a597b4a505b1991ea"
+    }
+  }
+}
