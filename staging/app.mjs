@@ -122,6 +122,12 @@ function renderRaterWorkspace() {
   }
 
   for (const assignment of state.workspace.assignments) {
+    if (assignment.kind === "initial") {
+      const consentState = renderParticipantConsentPanel(assignment);
+      elements.workspaceContent.append(consentState.panel);
+      if (!consentState.recorded) continue;
+    }
+
     const section = document.createElement("section");
     section.className = "panel assignment-panel";
     section.dataset.assignmentId = assignment.id;
@@ -146,7 +152,206 @@ function renderRaterWorkspace() {
     for (const critique of assignment.critiques) critiqueList.append(renderCritiqueCard(assignment, critique));
     renderAssignmentActions(section.querySelector(".assignment-actions"), assignment);
     elements.workspaceContent.append(section);
+    if (assignment.kind === "initial" && ["submitted", "withdrawn"].includes(assignment.status)) {
+      elements.workspaceContent.append(renderParticipantDebriefPanel(assignment));
+    }
   }
+}
+
+
+function renderParticipantConsentPanel(assignment) {
+  const existing = (assignment.participantEvidence ?? []).find((record) => record.kind === "consent") ?? null;
+  const panel = document.createElement("section");
+  panel.className = "panel participant-evidence-panel participant-consent-panel";
+  panel.dataset.assignmentId = assignment.id;
+  panel.dataset.evidenceKind = "consent";
+
+  if (existing) {
+    panel.innerHTML = `
+      <p class="eyebrow">Synthetic-session consent</p>
+      <div class="evidence-complete">
+        <div>
+          <h2>Consent recorded</h2>
+          <p>Your synthetic scores remain excluded from research, model training, evaluation, publication, and public attribution.</p>
+        </div>
+        <span>${escapeHtml(new Date(existing.submittedAt).toLocaleString())}</span>
+      </div>`;
+    return { panel, recorded: true };
+  }
+
+  panel.innerHTML = `
+    <p class="eyebrow">Synthetic-session consent</p>
+    <h2>Confirm the scope before opening the assignment</h2>
+    <p class="muted">This protected exercise tests the workflow and your understanding of the rubric. It is not a research-rating task. Identifiable H-11 records follow the approved limited-retention rule; Metaphilosophy will not publicly name, quote, or attribute your feedback without separate permission.</p>
+    <form class="participant-consent-form evidence-form" data-assignment-id="${escapeHtml(assignment.id)}">
+      <label class="check-row"><input name="scopeAndDataTermsRead" type="checkbox" required><span>I have read the H-11 synthetic usability-session scope and data terms.</span></label>
+      <label class="check-row"><input name="syntheticScoresExcluded" type="checkbox" required><span>I understand that my scores are synthetic test data and are excluded from research use.</span></label>
+      <label class="check-row"><input name="auditTrailAndNotesConsented" type="checkbox" required><span>I consent to the private audit trail and de-identified internal usability notes described in the session terms.</span></label>
+      <label class="check-row"><input name="voluntaryAndMayStop" type="checkbox" required><span>I understand that participation is voluntary and that I may stop or withdraw at any time.</span></label>
+      <div class="evidence-actions">
+        <button class="primary-button" type="submit">Record consent and open synthetic assignment</button>
+        <p class="form-status" role="status"></p>
+      </div>
+    </form>`;
+
+  const form = panel.querySelector(".participant-consent-form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const status = form.querySelector(".form-status");
+    const submit = form.querySelector('button[type="submit"]');
+    const data = new FormData(form);
+    const payload = {
+      scopeAndDataTermsRead: data.get("scopeAndDataTermsRead") === "on",
+      syntheticScoresExcluded: data.get("syntheticScoresExcluded") === "on",
+      auditTrailAndNotesConsented: data.get("auditTrailAndNotesConsented") === "on",
+      voluntaryAndMayStop: data.get("voluntaryAndMayStop") === "on",
+    };
+    submit.disabled = true;
+    status.textContent = "Recording consent…";
+    status.className = "form-status";
+    try {
+      await api("participant.evidence.record", {
+        method: "POST",
+        body: { assignmentId: assignment.id, kind: "consent", payload },
+      });
+      status.textContent = "Consent recorded.";
+      await loadWorkspace();
+    } catch (error) {
+      status.textContent = error.message;
+      status.className = "form-status error-message";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  return { panel, recorded: false };
+}
+
+function renderParticipantDebriefPanel(assignment) {
+  const existing = (assignment.participantEvidence ?? []).find((record) => record.kind === "debrief") ?? null;
+  const panel = document.createElement("section");
+  panel.className = "panel participant-evidence-panel participant-debrief-panel";
+  panel.dataset.assignmentId = assignment.id;
+  panel.dataset.evidenceKind = "debrief";
+
+  if (existing) {
+    panel.innerHTML = `
+      <p class="eyebrow">Synthetic-session debrief</p>
+      <div class="evidence-complete">
+        <div>
+          <h2>Debrief recorded</h2>
+          <p>The private append-only evidence record now includes your rubric-comprehension and workflow-usability responses.</p>
+        </div>
+        <span>${escapeHtml(new Date(existing.submittedAt).toLocaleString())}</span>
+      </div>`;
+    return panel;
+  }
+
+  panel.innerHTML = `
+    <p class="eyebrow">Synthetic-session debrief</p>
+    <h2>Record what the workflow made clear—and what it did not</h2>
+    <p class="muted">Answer in your own words. These responses are synthetic usability evidence, not research ratings. Report any hidden metadata or non-synthetic material immediately.</p>
+    <form class="participant-debrief-form evidence-form" data-assignment-id="${escapeHtml(assignment.id)}">
+      <fieldset>
+        <legend>Rubric comprehension</legend>
+        <label class="full-width"><span>What is centrality measuring?</span><textarea name="centralityDefinition" rows="3" minlength="20" maxlength="2000" required></textarea></label>
+        <label class="full-width"><span>What is strength measuring?</span><textarea name="strengthDefinition" rows="3" minlength="20" maxlength="2000" required></textarea></label>
+        <label class="full-width"><span>Why can the product of strength and centrality matter even when the two components are individually ambiguous?</span><textarea name="productImportance" rows="3" minlength="20" maxlength="2000" required></textarea></label>
+        <label class="full-width"><span>What should happen when clarity is below 0.5?</span><textarea name="lowClarityTreatment" rows="3" minlength="20" maxlength="2000" required></textarea></label>
+        <label class="full-width"><span>Why are initial ratings preserved after later reconsideration?</span><textarea name="immutableInitialsReason" rows="3" minlength="20" maxlength="2000" required></textarea></label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Workflow experience · 1 is poor, 5 is excellent</legend>
+        <div class="evidence-scale-grid">
+          ${renderScaleSelect("workflowClarity", "Clarity of what to do next")}
+          ${renderScaleSelect("autosaveConfidence", "Confidence in autosave")}
+          ${renderScaleSelect("resumeConfidence", "Confidence after close and resume")}
+          ${renderScaleSelect("lockedStateClarity", "Clarity of the post-submit locked state")}
+          ${renderScaleSelect("recoveryPathClarity", "Clarity of correction, withdrawal, or failure recovery")}
+          ${renderScaleSelect("researchBoundaryClarity", "Clarity that this is not research")}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Session context and safety</legend>
+        <div class="evidence-scale-grid">
+          <label><span>Device class</span><select name="deviceClass" required><option value="">Select</option><option value="desktop">Desktop or laptop</option><option value="narrow_mobile">Narrow mobile viewport</option><option value="tablet">Tablet</option><option value="other">Other</option></select></label>
+          <label><span>Browser</span><select name="browserFamily" required><option value="">Select</option><option value="chrome">Chrome / Chromium</option><option value="safari">Safari</option><option value="firefox">Firefox</option><option value="edge">Edge</option><option value="other">Other</option></select></label>
+          <label><span>Recovery path exercised</span><select name="recoveryPath" required><option value="">Select</option><option value="correction">Correction request</option><option value="withdrawal">Withdrawal request</option><option value="controlled_failure">Controlled failure and retry</option><option value="none">None</option></select></label>
+          <label><span>Session duration in minutes</span><input name="sessionDurationMinutes" type="number" min="1" max="240" step="1" required></label>
+          <label><span>Did you see metadata, another participant, a source, a provisional label, or adjudication state that should have been hidden?</span><select name="sawUnexpectedMetadata" required><option value="">Select</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+          <label><span>Did any real, protected, or non-synthetic material appear?</span><select name="sawNonSyntheticMaterial" required><option value="">Select</option><option value="no">No</option><option value="yes">Yes</option></select></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Usability feedback</legend>
+        <label class="full-width"><span>What was most confusing or cognitively burdensome?</span><textarea name="mostConfusing" rows="4" maxlength="4000"></textarea></label>
+        <label class="full-width"><span>What single change would most improve the experience for an expert rater?</span><textarea name="improvementSuggestion" rows="4" minlength="10" maxlength="4000" required></textarea></label>
+      </fieldset>
+
+      <div class="support-callout evidence-stop-callout">
+        <strong>Do not submit quietly if a stop condition occurred</strong>
+        <span>If either safety question is “Yes,” stop and contact the operator in the invitation thread. The record will preserve the report, but the session must be treated as stopped pending review.</span>
+      </div>
+
+      <div class="evidence-actions">
+        <button class="primary-button" type="submit">Submit synthetic-session debrief</button>
+        <p class="form-status" role="status"></p>
+      </div>
+    </form>`;
+
+  const form = panel.querySelector(".participant-debrief-form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const status = form.querySelector(".form-status");
+    const submit = form.querySelector('button[type="submit"]');
+    const data = new FormData(form);
+    const payload = {
+      centralityDefinition: data.get("centralityDefinition") || "",
+      strengthDefinition: data.get("strengthDefinition") || "",
+      productImportance: data.get("productImportance") || "",
+      lowClarityTreatment: data.get("lowClarityTreatment") || "",
+      immutableInitialsReason: data.get("immutableInitialsReason") || "",
+      workflowClarity: Number(data.get("workflowClarity")),
+      autosaveConfidence: Number(data.get("autosaveConfidence")),
+      resumeConfidence: Number(data.get("resumeConfidence")),
+      lockedStateClarity: Number(data.get("lockedStateClarity")),
+      recoveryPathClarity: Number(data.get("recoveryPathClarity")),
+      researchBoundaryClarity: Number(data.get("researchBoundaryClarity")),
+      sawUnexpectedMetadata: data.get("sawUnexpectedMetadata") === "yes",
+      sawNonSyntheticMaterial: data.get("sawNonSyntheticMaterial") === "yes",
+      deviceClass: data.get("deviceClass") || "",
+      browserFamily: data.get("browserFamily") || "",
+      recoveryPath: data.get("recoveryPath") || "",
+      sessionDurationMinutes: Number(data.get("sessionDurationMinutes")),
+      mostConfusing: data.get("mostConfusing") || "",
+      improvementSuggestion: data.get("improvementSuggestion") || "",
+    };
+    submit.disabled = true;
+    status.textContent = "Recording debrief…";
+    status.className = "form-status";
+    try {
+      await api("participant.evidence.record", {
+        method: "POST",
+        body: { assignmentId: assignment.id, kind: "debrief", payload },
+      });
+      status.textContent = "Debrief recorded.";
+      await loadWorkspace();
+    } catch (error) {
+      status.textContent = error.message;
+      status.className = "form-status error-message";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  return panel;
+}
+
+function renderScaleSelect(name, label) {
+  return `<label><span>${escapeHtml(label)}</span><select name="${escapeHtml(name)}" required><option value="">Select</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>`;
 }
 
 function renderCritiqueCard(assignment, critique) {
@@ -402,9 +607,80 @@ function renderOperatorWorkspace() {
   document.querySelector("#private-export-button").addEventListener("click", () => downloadExport("export.private", "metaphilosophy-staging-private.json"));
   document.querySelector("#public-export-button").addEventListener("click", () => downloadExport("export.public", "metaphilosophy-staging-public.json"));
 
+  renderOperatorParticipantEvidence();
   renderOperatorCorrectionQueue();
   renderOperatorWithdrawalQueue();
   renderOperatorAdjudicationQueue();
+}
+
+
+function renderOperatorParticipantEvidence() {
+  const panel = document.createElement("section");
+  panel.className = "panel operator-queue participant-evidence-operator";
+  panel.dataset.queue = "participant-evidence";
+  panel.innerHTML = "<p class=\"eyebrow\">H-11 human evidence</p><h2>Consent and debrief records</h2><p class=\"muted\">These records are private synthetic-usability evidence. They do not authorize research use, participant access, payment, or H-12 sign-off.</p>";
+
+  const initialAssignments = (state.workspace.assignments ?? []).filter((assignment) => assignment.kind === "initial");
+  if (!initialAssignments.length) {
+    panel.insertAdjacentHTML("beforeend", "<p class=\"muted\">No initial synthetic assignment has been created.</p>");
+  }
+
+  for (const assignment of initialAssignments) {
+    const identity = state.workspace.identities.find((candidate) => candidate.id === assignment.identityId);
+    const records = (state.workspace.participantEvidence ?? []).filter((record) => record.assignmentId === assignment.id);
+    const consent = records.find((record) => record.kind === "consent") ?? null;
+    const debrief = records.find((record) => record.kind === "debrief") ?? null;
+    const card = document.createElement("article");
+    card.className = "subpanel operator-evidence-card";
+    card.dataset.assignmentId = assignment.id;
+    card.innerHTML = `
+      <div class="operator-evidence-heading">
+        <div><p class="eyebrow">${escapeHtml(assignment.status)}</p><h3>${escapeHtml(identity?.displayName || assignment.identityId)}</h3></div>
+        <div class="evidence-chip-row">
+          <span class="evidence-chip ${consent ? "is-complete" : ""}">Consent ${consent ? "recorded" : "missing"}</span>
+          <span class="evidence-chip ${debrief ? "is-complete" : ""}">Debrief ${debrief ? "recorded" : "missing"}</span>
+        </div>
+      </div>
+      <p>Assignment <code>${escapeHtml(assignment.id)}</code></p>`;
+
+    if (consent) {
+      card.insertAdjacentHTML("beforeend", `<p class="status-banner"><strong>Consent record</strong><span>${escapeHtml(consent.version)} · ${escapeHtml(consent.submittedAt)}</span></p>`);
+    }
+
+    if (debrief) {
+      const p = debrief.payload;
+      const details = document.createElement("details");
+      details.className = "technical-integrity operator-debrief-details";
+      details.innerHTML = `
+        <summary>Review synthetic-session debrief</summary>
+        <dl>
+          <div><dt>Centrality</dt><dd>${escapeHtml(p.centralityDefinition)}</dd></div>
+          <div><dt>Strength</dt><dd>${escapeHtml(p.strengthDefinition)}</dd></div>
+          <div><dt>Strength × centrality</dt><dd>${escapeHtml(p.productImportance)}</dd></div>
+          <div><dt>Low clarity</dt><dd>${escapeHtml(p.lowClarityTreatment)}</dd></div>
+          <div><dt>Immutable initials</dt><dd>${escapeHtml(p.immutableInitialsReason)}</dd></div>
+          <div><dt>Workflow scales</dt><dd>${escapeHtml(JSON.stringify({
+            workflow: p.workflowClarity,
+            autosave: p.autosaveConfidence,
+            resume: p.resumeConfidence,
+            lockedState: p.lockedStateClarity,
+            recovery: p.recoveryPathClarity,
+            researchBoundary: p.researchBoundaryClarity,
+          }))}</dd></div>
+          <div><dt>Safety observations</dt><dd>Unexpected metadata: ${p.sawUnexpectedMetadata ? "YES — STOP" : "no"} · non-synthetic material: ${p.sawNonSyntheticMaterial ? "YES — STOP" : "no"}</dd></div>
+          <div><dt>Session context</dt><dd>${escapeHtml(p.deviceClass)} · ${escapeHtml(p.browserFamily)} · ${escapeHtml(p.recoveryPath)} · ${escapeHtml(p.sessionDurationMinutes)} minutes</dd></div>
+          <div><dt>Most confusing</dt><dd>${escapeHtml(p.mostConfusing || "No response.")}</dd></div>
+          <div><dt>Suggested change</dt><dd>${escapeHtml(p.improvementSuggestion)}</dd></div>
+        </dl>`;
+      if (p.sawUnexpectedMetadata || p.sawNonSyntheticMaterial) {
+        details.classList.add("has-stop-condition");
+      }
+      card.append(details);
+    }
+
+    panel.append(card);
+  }
+  elements.workspaceContent.append(panel);
 }
 
 function renderOperatorCorrectionQueue() {

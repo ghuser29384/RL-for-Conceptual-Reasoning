@@ -14,13 +14,11 @@ const roleKicker = document.querySelector("#role-kicker");
 let enhancementQueued = false;
 
 const observer = new MutationObserver(() => queueEnhancement());
-observer.observe(document.body, {
-  childList: true,
-  subtree: true,
-  characterData: true,
-  attributes: true,
-  attributeFilter: ["data-kind", "hidden"],
-});
+if (workspaceContent) {
+  observer.observe(workspaceContent, {
+    childList: true,
+  });
+}
 
 for (const eventName of ["input", "change"]) {
   document.addEventListener(eventName, (event) => {

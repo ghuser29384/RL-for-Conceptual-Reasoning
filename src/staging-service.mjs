@@ -11,6 +11,9 @@ const SESSION_TTL_HOURS = 12;
 const INVITE_TTL_HOURS = 72;
 const VALID_ROLES = new Set(["operator", "rater", "adjudicator"]);
 const TERMINAL_ASSIGNMENT_STATES = new Set(["submitted", "withdrawn"]);
+const PARTICIPANT_EVIDENCE_KINDS = new Set(["consent", "debrief"]);
+const H11_CONSENT_VERSION = "H11-CONSENT-2026-08-07-V1";
+const H11_DEBRIEF_VERSION = "H11-DEBRIEF-2026-08-07-V1";
 
 export class StagingWorkflowService {
   constructor({ store, now = () => new Date(), sessionTtlHours = SESSION_TTL_HOURS, inviteTtlHours = INVITE_TTL_HOURS }) {
@@ -208,6 +211,57 @@ export class StagingWorkflowService {
     if (identity.role === "adjudicator") return this.adjudicatorWorkspace(state, identity);
     if (identity.role === "operator") return this.operatorWorkspace(state, identity);
     throw serviceError(403, "unsupported_role", "This role has no staging workspace.");
+  }
+
+
+  async recordParticipantEvidence({ sessionToken, assignmentId, kind, payload }) {
+    const authenticated = await this.requireRole(sessionToken, "rater");
+    const state = await this.state();
+    const assignment = ownedAssignment(state, assignmentId, authenticated.identity.id);
+    if (assignment.kind !== "initial") {
+      throw serviceError(400, "wrong_assignment_kind", "H-11 consent and debrief records attach to the initial synthetic assignment.");
+    }
+    if (!PARTICIPANT_EVIDENCE_KINDS.has(kind)) {
+      throw serviceError(400, "invalid_evidence_kind", "Evidence kind must be consent or debrief.");
+    }
+    if (kind === "debrief" && !TERMINAL_ASSIGNMENT_STATES.has(assignment.status)) {
+      throw serviceError(409, "assignment_not_terminal", "Submit or withdraw the synthetic assignment before recording the debrief.");
+    }
+
+    const normalized = normalizeParticipantEvidence(kind, payload);
+    const existing = state.participantEvidence.find((record) => (
+      record.assignmentId === assignmentId
+      && record.identityId === authenticated.identity.id
+      && record.kind === kind
+    ));
+    if (existing) {
+      if (existing.version !== normalized.version || JSON.stringify(existing.payload) !== JSON.stringify(normalized.payload)) {
+        throw serviceError(409, "participant_evidence_locked", "This participant evidence record is immutable and has already been submitted.");
+      }
+      return { record: publicParticipantEvidence(existing), replay: true };
+    }
+
+    const submittedAt = this.now().toISOString();
+    const record = {
+      id: randomUUID(),
+      assignmentId,
+      identityId: authenticated.identity.id,
+      kind,
+      version: normalized.version,
+      payload: normalized.payload,
+      submittedAt,
+    };
+    await this.store.appendMany([
+      event("participant.evidence.recorded", record.id, authenticated.identity.id, record, submittedAt),
+      event("audit.recorded", randomUUID(), authenticated.identity.id, {
+        action: "participant.evidence.recorded",
+        subjectId: record.id,
+        assignmentId,
+        kind,
+        version: record.version,
+      }, submittedAt),
+    ]);
+    return { record: publicParticipantEvidence(record), replay: false };
   }
 
   async saveDraft({ sessionToken, assignmentId, critiqueId, expectedVersion, rating }) {
@@ -542,6 +596,9 @@ export class StagingWorkflowService {
           receipt: state.submissionReceipts.find((receipt) => receipt.assignmentId === assignment.id) ?? null,
           correctionRequests: state.correctionRequests.filter((request) => request.assignmentId === assignment.id),
           withdrawalRequests: state.withdrawalRequests.filter((request) => request.assignmentId === assignment.id),
+          participantEvidence: state.participantEvidence
+            .filter((record) => record.assignmentId === assignment.id && record.identityId === identity.id)
+            .map(publicParticipantEvidence),
         };
       }),
     };
@@ -573,6 +630,7 @@ export class StagingWorkflowService {
       correctionRequests: state.correctionRequests,
       withdrawalRequests: state.withdrawalRequests,
       adjudicationCases: state.adjudicationCases.map(publicAdjudicationCase),
+      participantEvidence: state.participantEvidence.map(publicParticipantEvidence),
       chain: state.chain,
     };
   }
@@ -626,7 +684,7 @@ export function reduceStagingEvents(events) {
   const state = {
     identities: [], invites: [], sessions: [], positions: [], critiques: [], assignments: [], drafts: [], ratings: [],
     submissionReceipts: [], correctionRequests: [], withdrawalRequests: [], adjudicationCases: [], adjudicationReviews: [],
-    labelSnapshots: [], auditEvents: [],
+    participantEvidence: [], labelSnapshots: [], auditEvents: [],
     chain: { events: events.length, headHash: events.at(-1)?.eventHash ?? "0".repeat(64) },
   };
   const upsert = (collection, value, key = "id") => {
@@ -657,6 +715,7 @@ export function reduceStagingEvents(events) {
       case "correction.requested": upsert(state.correctionRequests, payload); break;
       case "correction.resolved": upsert(state.correctionRequests, { id: payload.requestId, status: payload.action === "reject" ? "rejected" : "approved", resolution: payload }); break;
       case "withdrawal.requested": upsert(state.withdrawalRequests, payload); break;
+      case "participant.evidence.recorded": upsert(state.participantEvidence, payload); break;
       case "adjudication.opened": upsert(state.adjudicationCases, payload); break;
       case "adjudication.reviewed": upsert(state.adjudicationReviews, payload); break;
       case "adjudication.closed": upsert(state.adjudicationCases, { id: payload.caseId, status: payload.status, closedAt: payload.closedAt, closureNotes: payload.notes }); break;
@@ -708,6 +767,78 @@ function normalizeRating(rating = {}) {
     verificationStatus: rating.verificationStatus,
     requestReview: Boolean(rating.requestReview),
   };
+}
+
+
+function normalizeParticipantEvidence(kind, payload = {}) {
+  if (kind === "consent") {
+    const normalized = {
+      scopeAndDataTermsRead: requireTrue(payload.scopeAndDataTermsRead, "Confirm that the scope and data terms were read."),
+      syntheticScoresExcluded: requireTrue(payload.syntheticScoresExcluded, "Confirm that the synthetic scores are excluded from research use."),
+      auditTrailAndNotesConsented: requireTrue(payload.auditTrailAndNotesConsented, "Consent to the private audit trail and de-identified internal usability notes."),
+      voluntaryAndMayStop: requireTrue(payload.voluntaryAndMayStop, "Confirm that participation is voluntary and may be stopped."),
+    };
+    return { version: H11_CONSENT_VERSION, payload: normalized };
+  }
+
+  if (kind === "debrief") {
+    const normalized = {
+      centralityDefinition: requireText(payload.centralityDefinition, 20, 2000, "Centrality explanation"),
+      strengthDefinition: requireText(payload.strengthDefinition, 20, 2000, "Strength explanation"),
+      productImportance: requireText(payload.productImportance, 20, 2000, "Strength-times-centrality explanation"),
+      lowClarityTreatment: requireText(payload.lowClarityTreatment, 20, 2000, "Low-clarity explanation"),
+      immutableInitialsReason: requireText(payload.immutableInitialsReason, 20, 2000, "Immutable-initials explanation"),
+      workflowClarity: requireScale(payload.workflowClarity, "Workflow clarity"),
+      autosaveConfidence: requireScale(payload.autosaveConfidence, "Autosave confidence"),
+      resumeConfidence: requireScale(payload.resumeConfidence, "Resume confidence"),
+      lockedStateClarity: requireScale(payload.lockedStateClarity, "Locked-state clarity"),
+      recoveryPathClarity: requireScale(payload.recoveryPathClarity, "Recovery-path clarity"),
+      researchBoundaryClarity: requireScale(payload.researchBoundaryClarity, "Research-boundary clarity"),
+      sawUnexpectedMetadata: requireBoolean(payload.sawUnexpectedMetadata, "Unexpected-metadata observation"),
+      sawNonSyntheticMaterial: requireBoolean(payload.sawNonSyntheticMaterial, "Non-synthetic-material observation"),
+      deviceClass: requireChoice(payload.deviceClass, ["desktop", "narrow_mobile", "tablet", "other"], "Device class"),
+      browserFamily: requireChoice(payload.browserFamily, ["chrome", "safari", "firefox", "edge", "other"], "Browser"),
+      recoveryPath: requireChoice(payload.recoveryPath, ["correction", "withdrawal", "controlled_failure", "none"], "Recovery path"),
+      sessionDurationMinutes: requireInteger(payload.sessionDurationMinutes, 1, 240, "Session duration"),
+      mostConfusing: optionalText(payload.mostConfusing, 4000),
+      improvementSuggestion: requireText(payload.improvementSuggestion, 10, 4000, "Improvement suggestion"),
+    };
+    return { version: H11_DEBRIEF_VERSION, payload: normalized };
+  }
+
+  throw serviceError(400, "invalid_evidence_kind", "Evidence kind must be consent or debrief.");
+}
+
+function requireTrue(value, message) {
+  if (value !== true) throw serviceError(400, "consent_incomplete", message);
+  return true;
+}
+
+function requireBoolean(value, label) {
+  if (typeof value !== "boolean") throw serviceError(400, "invalid_boolean", `${label} must be explicitly answered.`);
+  return value;
+}
+
+function requireScale(value, label) {
+  return requireInteger(value, 1, 5, label);
+}
+
+function requireInteger(value, minimum, maximum, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+    throw serviceError(400, "invalid_integer", `${label} must be an integer from ${minimum} to ${maximum}.`);
+  }
+  return number;
+}
+
+function requireChoice(value, allowed, label) {
+  const choice = String(value ?? "");
+  if (!allowed.includes(choice)) throw serviceError(400, "invalid_choice", `${label} is invalid.`);
+  return choice;
+}
+
+function optionalText(value, maximum) {
+  return String(value ?? "").trim().slice(0, maximum);
 }
 
 function roundScore(value) {
@@ -788,6 +919,18 @@ function publicRating(rating) {
 
 function publicAdjudicationCase(adjudicationCase) {
   return { id: adjudicationCase.id, positionId: adjudicationCase.positionId, trigger: adjudicationCase.trigger, reason: adjudicationCase.reason, triggerDetail: adjudicationCase.triggerDetail ?? [], status: adjudicationCase.status, createdAt: adjudicationCase.createdAt, closedAt: adjudicationCase.closedAt ?? null };
+}
+
+function publicParticipantEvidence(record) {
+  return record ? {
+    id: record.id,
+    assignmentId: record.assignmentId,
+    identityId: record.identityId,
+    kind: record.kind,
+    version: record.version,
+    payload: structuredClone(record.payload),
+    submittedAt: record.submittedAt,
+  } : null;
 }
 
 function publicCounts(state) {

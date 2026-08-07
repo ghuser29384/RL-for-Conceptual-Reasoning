@@ -49,6 +49,7 @@ test("complete synthetic human workflow preserves initial ratings across correct
   const pageA = await contextA.newPage();
   await redeemInBrowser(pageA, setup.raterA.inviteToken);
   await expect(pageA.getByRole("heading", { name: "Rate contextualized critiques" })).toBeVisible();
+  await completeSyntheticConsent(pageA);
   await expect(pageA.locator(".critique-card")).toHaveCount(4);
   await expect(pageA.getByText("Synthetic browser rater B")).toHaveCount(0);
   await expect(pageA.getByText("Source", { exact: true })).toHaveCount(0);
@@ -75,6 +76,7 @@ test("complete synthetic human workflow preserves initial ratings across correct
   const contextB = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const pageB = await contextB.newPage();
   await redeemInBrowser(pageB, setup.raterB.inviteToken);
+  await completeSyntheticConsent(pageB);
   await expect(pageB.getByText("Synthetic browser rater A")).toHaveCount(0);
   const overflow = await pageB.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
@@ -128,10 +130,17 @@ test("complete synthetic human workflow preserves initial ratings across correct
   await expect(pageB.locator(".withdrawal-request-status")).toContainText("Withdrawal recorded; assignment locked");
   await expect(pageB.locator(".withdrawal-request-status")).toContainText("remain in the private audit trail");
 
+  await completeSyntheticDebrief(resumedPageA, { recoveryPath: "correction", deviceClass: "desktop" });
+  await completeSyntheticDebrief(pageB, { recoveryPath: "withdrawal", deviceClass: "narrow_mobile" });
+
   const operatorContext = await browser.newContext({ storageState: await operatorRequest.storageState() });
   const operatorPage = await operatorContext.newPage();
   await operatorPage.goto("/staging/");
   await expect(operatorPage.getByRole("heading", { name: "Staging operator workspace" })).toBeVisible();
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Synthetic browser rater A");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Synthetic browser rater B");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Consent recorded");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Debrief recorded");
   await expect(operatorPage.locator('[data-queue="corrections"]')).toContainText("Synthetic browser rater A");
   await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("Synthetic browser rater B");
   await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("Accepted records remain retained");
@@ -183,6 +192,9 @@ test("complete synthetic human workflow preserves initial ratings across correct
   expect(privateExport.state.assignments.filter((assignment) => assignment.kind === "rerating")).toHaveLength(1);
   expect(privateExport.state.assignments.find((assignment) => assignment.kind === "rerating").predecessorAssignmentId).toBe(setup.raterA.assignmentId);
   expect(privateExport.state.assignments.find((assignment) => assignment.id === setup.raterB.assignmentId).status).toBe("withdrawn");
+  expect(privateExport.state.participantEvidence).toHaveLength(4);
+  expect(privateExport.state.participantEvidence.filter((record) => record.kind === "consent")).toHaveLength(2);
+  expect(privateExport.state.participantEvidence.filter((record) => record.kind === "debrief")).toHaveLength(2);
 
   const snapshots = privateExport.state.labelSnapshots;
   expect(snapshots).toHaveLength(3);
@@ -193,6 +205,7 @@ test("complete synthetic human workflow preserves initial ratings across correct
 
   const publicExport = await api(operatorRequest, "export.public");
   expect(JSON.stringify(publicExport)).not.toContain("@staging.metaphilosophy.invalid");
+  expect(JSON.stringify(publicExport)).not.toContain("Centrality measures how much the attacked claim matters");
   expect(publicExport.counts.ratings).toBe(12);
   expect(publicExport.snapshots).toHaveLength(3);
 
@@ -201,6 +214,52 @@ test("complete synthetic human workflow preserves initial ratings across correct
   await adjudicatorContext.close();
   await operatorContext.close();
 });
+
+
+async function completeSyntheticConsent(page) {
+  const form = page.locator(".participant-consent-form").first();
+  await expect(form).toBeVisible();
+  for (const name of [
+    "scopeAndDataTermsRead",
+    "syntheticScoresExcluded",
+    "auditTrailAndNotesConsented",
+    "voluntaryAndMayStop",
+  ]) {
+    await form.locator(`input[name="${name}"]`).check();
+  }
+  await form.getByRole("button", { name: "Record consent and open synthetic assignment" }).click();
+  await expect(page.getByText("Consent recorded", { exact: true })).toBeVisible();
+}
+
+async function completeSyntheticDebrief(page, { recoveryPath, deviceClass }) {
+  const form = page.locator(".participant-debrief-form").first();
+  await expect(form).toBeVisible();
+  await form.locator('textarea[name="centralityDefinition"]').fill("Centrality measures how much the attacked claim matters to the position as it is actually stated.");
+  await form.locator('textarea[name="strengthDefinition"]').fill("Strength measures how successfully the critique undermines the particular claims that it attacks.");
+  await form.locator('textarea[name="productImportance"]').fill("The product tracks substantive impact even when score mass can reasonably move between strength and centrality.");
+  await form.locator('textarea[name="lowClarityTreatment"]').fill("When clarity is below 0.5, the component ratings become less dependable and clarity plus overall deserve special weight.");
+  await form.locator('textarea[name="immutableInitialsReason"]').fill("Initial ratings remain immutable so later reconsideration cannot erase the original independent distribution.");
+  for (const [name, value] of [
+    ["workflowClarity", "5"],
+    ["autosaveConfidence", "5"],
+    ["resumeConfidence", "5"],
+    ["lockedStateClarity", "5"],
+    ["recoveryPathClarity", "4"],
+    ["researchBoundaryClarity", "5"],
+  ]) {
+    await form.locator(`select[name="${name}"]`).selectOption(value);
+  }
+  await form.locator('select[name="deviceClass"]').selectOption(deviceClass);
+  await form.locator('select[name="browserFamily"]').selectOption("chrome");
+  await form.locator('select[name="recoveryPath"]').selectOption(recoveryPath);
+  await form.locator('input[name="sessionDurationMinutes"]').fill("72");
+  await form.locator('select[name="sawUnexpectedMetadata"]').selectOption("no");
+  await form.locator('select[name="sawNonSyntheticMaterial"]').selectOption("no");
+  await form.locator('textarea[name="mostConfusing"]').fill("The distinction between correctness and strength required the most careful attention.");
+  await form.locator('textarea[name="improvementSuggestion"]').fill("Keep a compact rubric summary visible while the participant writes the object-level rationale.");
+  await form.getByRole("button", { name: "Submit synthetic-session debrief" }).click();
+  await expect(page.getByText("Debrief recorded", { exact: true })).toBeVisible();
+}
 
 async function redeemInBrowser(page, token) {
   await page.goto(`/staging/?invite=${encodeURIComponent(token)}`);

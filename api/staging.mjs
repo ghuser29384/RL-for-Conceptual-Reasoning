@@ -18,6 +18,7 @@ const MUTATING_ACTIONS = new Set([
   "assignment.create",
   "draft.save",
   "assignment.submit",
+  "participant.evidence.record",
   "correction.request",
   "withdrawal.request",
   "correction.resolve",
@@ -128,6 +129,10 @@ export function createStagingApiHandler(options = {}) {
         case "assignment.submit":
           requireMethod(req, "POST");
           result = await runtime.service.submitAssignment({ sessionToken, ...body });
+          break;
+        case "participant.evidence.record":
+          requireMethod(req, "POST");
+          result = await runtime.service.recordParticipantEvidence({ sessionToken, ...body });
           break;
         case "correction.request":
           requireMethod(req, "POST");

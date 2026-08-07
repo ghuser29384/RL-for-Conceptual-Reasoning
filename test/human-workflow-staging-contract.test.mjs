@@ -81,6 +81,29 @@ test("two raters remain isolated and produce immutable, idempotent, adjudicable 
   const assignmentA = await harness.service.createAssignment({ actorSessionToken: operator.sessionToken, identityId: raterAIdentity.identity.id, positionId, kind: "initial" });
   const assignmentB = await harness.service.createAssignment({ actorSessionToken: operator.sessionToken, identityId: raterBIdentity.identity.id, positionId, kind: "initial" });
 
+
+const consentA = await harness.service.recordParticipantEvidence({
+  sessionToken: raterA.sessionToken,
+  assignmentId: assignmentA.assignment.id,
+  kind: "consent",
+  payload: makeConsentPayload(),
+});
+const consentB = await harness.service.recordParticipantEvidence({
+  sessionToken: raterB.sessionToken,
+  assignmentId: assignmentB.assignment.id,
+  kind: "consent",
+  payload: makeConsentPayload(),
+});
+assert.equal(consentA.replay, false);
+assert.equal(consentB.replay, false);
+assert.equal((await harness.service.recordParticipantEvidence({
+  sessionToken: raterA.sessionToken,
+  assignmentId: assignmentA.assignment.id,
+  kind: "consent",
+  payload: makeConsentPayload(),
+})).replay, true);
+
+
   const workspaceA = await harness.service.getWorkspace(raterA.sessionToken);
   const workspaceB = await harness.service.getWorkspace(raterB.sessionToken);
   assert.equal(JSON.stringify(workspaceA).includes(raterBIdentity.identity.id), false);
@@ -153,14 +176,42 @@ test("two raters remain isolated and produce immutable, idempotent, adjudicable 
   assert.equal(closed.snapshot.reratingIds.length, 4);
 
   await harness.service.requestWithdrawal({ sessionToken: raterB.sessionToken, assignmentId: assignmentB.assignment.id, reason: "Synthetic withdrawal drill after accepted initial work; records must remain preserved." });
+  await harness.service.recordParticipantEvidence({
+    sessionToken: raterA.sessionToken,
+    assignmentId: assignmentA.assignment.id,
+    kind: "debrief",
+    payload: makeDebriefPayload({ recoveryPath: "correction", deviceClass: "desktop" }),
+  });
+  await harness.service.recordParticipantEvidence({
+    sessionToken: raterB.sessionToken,
+    assignmentId: assignmentB.assignment.id,
+    kind: "debrief",
+    payload: makeDebriefPayload({ recoveryPath: "withdrawal", deviceClass: "narrow_mobile" }),
+  });
+  await assert.rejects(
+    () => harness.service.recordParticipantEvidence({
+      sessionToken: raterB.sessionToken,
+      assignmentId: assignmentB.assignment.id,
+      kind: "debrief",
+      payload: { ...makeDebriefPayload({ recoveryPath: "withdrawal", deviceClass: "narrow_mobile" }), improvementSuggestion: "A different suggestion must not overwrite the recorded debrief." },
+    }),
+    (error) => error.status === 409 && error.code === "participant_evidence_locked",
+  );
+
   const finalState = await harness.service.state();
   assert.equal(finalState.ratings.length, 12);
   assert.equal(finalState.labelSnapshots.length, 1);
+  assert.equal(finalState.participantEvidence.length, 4);
   assert.equal(finalState.assignments.find((item) => item.id === assignmentB.assignment.id).status, "withdrawn");
 
+  const operatorWorkspace = await harness.service.getWorkspace(operator.sessionToken);
+  assert.equal(operatorWorkspace.participantEvidence.length, 4);
   const publicExport = await harness.service.operatorExport({ actorSessionToken: operator.sessionToken, publicOnly: true });
   const privateExport = await harness.service.operatorExport({ actorSessionToken: operator.sessionToken, publicOnly: false });
   assert.equal(JSON.stringify(publicExport).includes("a@example.invalid"), false);
+  assert.equal(JSON.stringify(publicExport).includes("Centrality measures how much the attacked claim matters"), false);
+  assert.equal(privateExport.state.participantEvidence.length, 4);
+  assert.ok(JSON.stringify(privateExport).includes("Centrality measures how much the attacked claim matters"));
   assert.ok(privateExport.events.length > 20);
 });
 
@@ -185,6 +236,40 @@ async function bootstrapOperator(harness) {
 async function redeemIdentity(harness, operatorToken, identityId) {
   const invite = await harness.service.createInvite({ actorSessionToken: operatorToken, identityId, expiresInHours: 24 });
   return harness.service.redeemInvite({ token: invite.token });
+}
+
+
+function makeConsentPayload() {
+  return {
+    scopeAndDataTermsRead: true,
+    syntheticScoresExcluded: true,
+    auditTrailAndNotesConsented: true,
+    voluntaryAndMayStop: true,
+  };
+}
+
+function makeDebriefPayload(overrides = {}) {
+  return {
+    centralityDefinition: "Centrality measures how much the attacked claim matters to the position as it is actually stated.",
+    strengthDefinition: "Strength measures how successfully the critique undermines the particular claims that it attacks.",
+    productImportance: "The product tracks substantive impact even when some score mass could reasonably move between strength and centrality.",
+    lowClarityTreatment: "When clarity falls below 0.5, the component scores become less dependable and clarity plus overall deserve special weight.",
+    immutableInitialsReason: "Initial ratings stay immutable so later reconsideration cannot erase the original independent distribution of judgment.",
+    workflowClarity: 5,
+    autosaveConfidence: 5,
+    resumeConfidence: 5,
+    lockedStateClarity: 5,
+    recoveryPathClarity: 4,
+    researchBoundaryClarity: 5,
+    sawUnexpectedMetadata: false,
+    sawNonSyntheticMaterial: false,
+    deviceClass: overrides.deviceClass ?? "desktop",
+    browserFamily: "chrome",
+    recoveryPath: overrides.recoveryPath ?? "none",
+    sessionDurationMinutes: 72,
+    mostConfusing: "The distinction between correctness and strength required the most careful attention.",
+    improvementSuggestion: "Keep a compact rubric summary visible while the participant writes the object-level rationale.",
+  };
 }
 
 function makeRating(overall, strength, overrides = {}) {
