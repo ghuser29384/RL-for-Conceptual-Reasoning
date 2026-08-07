@@ -1,0 +1,38 @@
+{
+  "record_id": "H11-NARROW-PROTECTED-STAGING-CANDIDATE-EVIDENCE-2026-08-07-V1",
+  "status": "pass",
+  "base_release_commit": "202135a21fb15f5a12698e6a78e8c8d8b7fa79ef",
+  "validated_source_snapshot": "aec2004789be192f2fb08e98f365faa371f20ba7",
+  "validated_product_commit": "9456b7ef198da9b0d409e725d807060e3860d8d2",
+  "candidate_branch": "candidate/h11-protected-staging-20260807",
+  "github_actions_run_id": 31170280535,
+  "github_actions_run_attempt": 1,
+  "validation": {
+    "narrow_path_allowlist": "pass",
+    "source_file_fidelity": "pass",
+    "syntax_and_static_contracts": "pass",
+    "focused_h11_tests": "pass",
+    "complete_repository_tests": "pass",
+    "public_build_excludes_staging": "pass",
+    "protected_preview_shape_build": "pass_without_deployment",
+    "local_controlled_staging_build": "pass",
+    "synthetic_lifecycle": "pass",
+    "support_tabletop": "pass",
+    "postgres_restart_backup_restore": "pass",
+    "rendered_chromium_workflow": "pass"
+  },
+  "authorization": {
+    "protected_release_branch_advanced": false,
+    "deployment_performed": false,
+    "participant_share_link_created": false,
+    "participant_application_invitation_created": false,
+    "outbound_participant_access_message_sent": false,
+    "participant_access_authorized": false,
+    "research_ratings_authorized": false,
+    "real_research_rating_collected": false,
+    "payment_committed_or_made": false,
+    "h11_passed": false,
+    "h12_signed": false
+  },
+  "next_gate": "separate owner review of the narrow candidate before any protected-branch advancement or deployment"
+}
