@@ -62,7 +62,35 @@ jobs:
       - name: Apply fail-closed restore-prefix patch
         env:
           GITHUB_REF_NAME: candidate/h11-hosted-acceptance-v3-20260807
-        run: python .github/apply_hosted_acceptance_prefix_v3.py
+        run: |
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          source = Path(".github/apply_hosted_acceptance_prefix_v3.py")
+          spec = importlib.util.spec_from_file_location("hosted_acceptance_prefix_v3", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+
+          def indent_nonblank(text: str, prefix: str) -> str:
+              return "\n".join((prefix + line) if line else line for line in text.split("\n"))
+
+          def robust_replace_once(path: str, old: str, new: str) -> None:
+              text = module.read(path)
+              if old in text:
+                  module.write(path, text.replace(old, new, 1))
+                  return
+              for width in (2, 4, 6, 8):
+                  prefix = " " * width
+                  candidate = indent_nonblank(old, prefix)
+                  if candidate in text:
+                      module.write(path, text.replace(candidate, indent_nonblank(new, prefix), 1))
+                      return
+              raise RuntimeError(f"{path}: anchor not found: {old[:180]!r}")
+
+          module.replace_once = robust_replace_once
+          module.main()
+          PY
 
       - name: Remove transient Python cache
         run: rm -rf .github/__pycache__
