@@ -116,6 +116,7 @@ jobs:
           node --check scripts/verify-human-workflow-staging.mjs
           node --check scripts/verify-v4-staging-schema.mjs
           node --check scripts/verify-vercel-oidc-staging-gateway.mjs
+          node --check test/human-workflow-staging-contract.test.mjs
           node --check test/hosted-staging-gateway-contract.test.mjs
           node --check test/h11-access-gate-contract.test.mjs
           node --check e2e/human-workflow-staging.spec.mjs
