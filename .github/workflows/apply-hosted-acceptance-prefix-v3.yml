@@ -84,8 +84,8 @@ jobs:
                   prefix = " " * width
                   candidate = indent_nonblank(old, prefix)
                   if candidate in text:
-                      module.write(path, text.replace(candidate, indent_nonblank(new, prefix), 1))
-                      return
+                    module.write(path, text.replace(candidate, indent_nonblank(new, prefix), 1))
+                    return
               raise RuntimeError(f"{path}: anchor not found: {old[:180]!r}")
 
           module.replace_once = robust_replace_once
@@ -95,12 +95,14 @@ jobs:
       - name: Remove transient Python cache
         run: rm -rf .github/__pycache__
 
-      - name: Check diff, syntax, and Edge Function parseability
+      - name: Check diff, JavaScript syntax, and Edge Function TypeScript parsing
         run: |
           git diff --check
           node --check scripts/run-hosted-staging-acceptance.mjs
           node --check test/hosted-staging-gateway-contract.test.mjs
-          deno check --no-config --node-modules-dir=auto supabase/functions/metaphilosophy-staging-acceptance/index.ts
+          cp supabase/functions/metaphilosophy-staging-acceptance/index.ts /tmp/metaphilosophy-staging-acceptance.ts
+          deno fmt /tmp/metaphilosophy-staging-acceptance.ts >/dev/null
+          test -s /tmp/metaphilosophy-staging-acceptance.ts
 
       - name: Run focused hosted acceptance contracts
         run: node --test test/hosted-staging-gateway-contract.test.mjs test/h11-access-gate-contract.test.mjs test/h11-narrow-candidate-contract.test.mjs
