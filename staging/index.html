@@ -7,8 +7,10 @@
   <meta name="referrer" content="no-referrer">
   <title>Metaphilosophy Review — controlled staging</title>
   <link rel="stylesheet" href="/staging/styles.css">
+  <link rel="stylesheet" href="/staging/participant-readiness.css">
 </head>
 <body>
+  <a class="skip-link" href="#workspace-content">Skip to the rating workspace</a>
   <header class="site-header">
     <a class="wordmark" href="/staging/" aria-label="Metaphilosophy Review staging home">
       <span>Metaphilosophy</span>
@@ -102,16 +104,17 @@
       <div class="operator-grid">
         <form id="create-identity-form" class="subpanel">
           <h3>Create controlled identity</h3>
-          <label><span>Display name</span><input name="displayName" required></label>
-          <label><span>Email</span><input name="email" type="email" required></label>
+          <label><span>Pseudonymous display label</span><input name="displayName" maxlength="160" required><small class="field-help">For an H-11 human, use only a slot alias such as “H-11 participant A”. Never enter the person's name.</small></label>
+          <label><span>Contact email</span><input name="email" type="email" required><small class="field-help">For an H-11 human, this address is validated in the request and then discarded; it is never written to the append-only ledger. Keep the identity mapping only in the approved external contact system.</small></label>
           <label><span>Role</span><select name="role" required><option value="rater">Rater</option><option value="adjudicator">Adjudicator</option><option value="operator">Operator</option></select></label>
+          <label><span>Purpose</span><select name="purpose" required><option value="synthetic_automation" data-role="rater">Synthetic automation rater</option><option value="h11_human_usability" data-role="rater">H-11 qualified human usability participant</option><option value="synthetic_adjudication" data-role="adjudicator">Synthetic adjudicator</option><option value="controlled_operator" data-role="operator">Controlled operator</option></select><small class="field-help">Synthetic identities must use a non-deliverable .invalid email. Human H-11 identities are access-gated separately.</small></label>
           <button class="primary-button" type="submit">Create identity</button>
           <div class="form-status" role="status"></div>
         </form>
         <form id="create-invite-form" class="subpanel">
           <h3>Issue expiring invitation</h3>
           <label><span>Identity</span><select name="identityId" required></select></label>
-          <label><span>Expires in hours</span><input name="expiresInHours" type="number" min="1" max="168" value="72" required></label>
+          <label><span>Expires in hours</span><input name="expiresInHours" type="number" min="1" max="168" value="3" required><small class="field-help">H-11 invitations are rejected until the complete access gate passes and may not outlive the approved session or protected share-link window.</small></label>
           <button class="primary-button" type="submit">Create invitation</button>
           <label class="full-width"><span>One-time token</span><textarea id="issued-token" rows="3" readonly></textarea></label>
           <div class="form-status" role="status"></div>
@@ -129,7 +132,7 @@
           <div class="button-row"><button id="private-export-button" class="secondary-button" type="button">Download private export</button><button id="public-export-button" class="secondary-button" type="button">Download public-safe export</button></div>
         </div>
       </div>
-      <div class="table-wrap"><table><caption>Controlled identities</caption><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>ID</th></tr></thead><tbody id="identity-table-body"></tbody></table></div>
+      <div class="table-wrap"><table><caption>Controlled identities</caption><thead><tr><th>Alias</th><th>Role</th><th>Purpose</th><th>Contact handling</th><th>Status</th><th>ID</th></tr></thead><tbody id="identity-table-body"></tbody></table></div>
       <div class="table-wrap"><table><caption>Assignments</caption><thead><tr><th>Identity</th><th>Kind</th><th>Status</th><th>Position</th><th>ID</th></tr></thead><tbody id="assignment-table-body"></tbody></table></div>
     </section>
   </template>
@@ -145,5 +148,6 @@
 
   <script type="module" src="/staging/operator-token-guard.mjs"></script>
   <script type="module" src="/staging/app.mjs"></script>
+  <script type="module" src="/staging/participant-readiness.mjs"></script>
 </body>
 </html>

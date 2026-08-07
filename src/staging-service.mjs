@@ -11,6 +11,16 @@ const SESSION_TTL_HOURS = 12;
 const INVITE_TTL_HOURS = 72;
 const VALID_ROLES = new Set(["operator", "rater", "adjudicator"]);
 const TERMINAL_ASSIGNMENT_STATES = new Set(["submitted", "withdrawn"]);
+const PARTICIPANT_EVIDENCE_KINDS = new Set(["consent", "debrief"]);
+const IDENTITY_PURPOSES = new Set(["synthetic_automation", "h11_human_usability", "synthetic_adjudication", "controlled_operator"]);
+const H11_CONSENT_VERSION = "H11-CONSENT-2026-08-07-V1";
+const H11_DEBRIEF_VERSION = "H11-DEBRIEF-2026-08-07-V1";
+const H11_ACCESS_GATE_VERSION = "H11-ACCESS-GATE-2026-08-07-V2";
+const H11_PAYMENT_RAILS = ["wise", "paypal", "us_bank_transfer", "waive", "other"];
+const H11_EXPOSURE_VALUES = ["no", "yes", "uncertain"];
+const H11_CONFLICT_VALUES = ["none_declared", "review_required", "disqualifying"];
+const H11_SCREENING_VALUES = ["pass", "pause", "decline"];
+const H11_CHECK_VALUES = ["pass", "review_required", "fail"];
 
 export class StagingWorkflowService {
   constructor({ store, now = () => new Date(), sessionTtlHours = SESSION_TTL_HOURS, inviteTtlHours = INVITE_TTL_HOURS }) {
@@ -46,6 +56,7 @@ export class StagingWorkflowService {
         role: "operator",
         displayName: "Synthetic rehearsal operator",
         email: normalizeEmail(operatorEmail),
+        purpose: "controlled_operator",
         status: "active",
       }, now),
       event("position.created", positionId, operatorId, {
@@ -65,23 +76,73 @@ export class StagingWorkflowService {
     return { operatorId, positionId, inviteToken: invite.token, inviteId: invite.invite.id };
   }
 
-  async createIdentity({ actorSessionToken, role, displayName, email }) {
+  async createIdentity({ actorSessionToken, role, displayName, email, purpose = null }) {
     const actor = await this.requireRole(actorSessionToken, "operator");
     if (!VALID_ROLES.has(role)) throw serviceError(400, "invalid_role", "Role must be operator, rater, or adjudicator.");
     const normalized = normalizeEmail(email);
     if (!normalized) throw serviceError(400, "invalid_email", "A valid email address is required.");
+    const normalizedPurpose = normalizeIdentityPurpose({ role, purpose, email: normalized });
     const state = await this.state();
+
+    if (normalizedPurpose === "h11_human_usability") {
+      const alias = normalizeH11ParticipantAlias(displayName);
+      const existingAlias = state.identities.find((identity) => (
+        identity.role === "rater"
+        && effectiveIdentityPurpose(identity) === "h11_human_usability"
+        && identity.displayName === alias
+        && identity.status === "active"
+      ));
+      if (existingAlias) {
+        throw serviceError(409, "h11_alias_conflict", "That H-11 participant alias is already active. Use the existing identity or choose another non-identifying slot alias.", {
+          identityId: existingAlias.id,
+        });
+      }
+      const identity = {
+        id: randomUUID(),
+        role,
+        purpose: normalizedPurpose,
+        displayName: alias,
+        email: null,
+        contactRouteValidated: true,
+        directContactPersisted: false,
+        status: "active",
+      };
+      await this.store.append(event("identity.created", identity.id, actor.identity.id, identity, this.now().toISOString()));
+      await this.audit(actor.identity.id, "identity.created", {
+        identityId: identity.id,
+        role,
+        purpose: normalizedPurpose,
+        contactRouteValidated: true,
+        directContactPersisted: false,
+      });
+      return { identity: publicIdentity(identity), created: true };
+    }
+
     const existing = state.identities.find((identity) => identity.email === normalized && identity.role === role && identity.status === "active");
-    if (existing) return { identity: publicIdentity(existing), created: false };
+    if (existing) {
+      if (effectiveIdentityPurpose(existing) !== normalizedPurpose) {
+        throw serviceError(409, "identity_purpose_conflict", "An active identity already exists with a different access purpose.");
+      }
+      return { identity: publicIdentity(existing), created: false };
+    }
     const identity = {
       id: randomUUID(),
       role,
+      purpose: normalizedPurpose,
       displayName: String(displayName ?? "").trim().slice(0, 160) || normalized,
       email: normalized,
+      contactRouteValidated: false,
+      directContactPersisted: true,
       status: "active",
     };
     await this.store.append(event("identity.created", identity.id, actor.identity.id, identity, this.now().toISOString()));
-    await this.audit(actor.identity.id, "identity.created", { identityId: identity.id, role });
+    await this.audit(actor.identity.id, "identity.created", {
+      identityId: identity.id,
+      role,
+      purpose: normalizedPurpose,
+      contactRouteValidated: false,
+      directContactPersisted: true,
+    });
     return { identity: publicIdentity(identity), created: true };
   }
 
@@ -89,8 +150,24 @@ export class StagingWorkflowService {
     const actor = await this.requireRole(actorSessionToken, "operator");
     const state = await this.state();
     const identity = activeIdentity(state, identityId);
-    const result = await this.createInviteInternal({ identityId: identity.id, actorId: actor.identity.id, expiresInHours });
-    await this.audit(actor.identity.id, "invite.created", { inviteId: result.invite.id, identityId: identity.id, expiresAt: result.invite.expiresAt });
+    const now = this.now();
+    const gate = resolveInviteAccessGate(state, identity, now, expiresInHours);
+    assertNoActiveH11Invite(state, identity.id, gate.metadata.h11AccessGateId ?? null, now);
+    const result = await this.createInviteInternal({
+      identityId: identity.id,
+      actorId: actor.identity.id,
+      expiresInHours,
+      expiresAt: gate.expiresAt,
+      metadata: gate.metadata,
+    });
+    await this.audit(actor.identity.id, "invite.created", {
+      inviteId: result.invite.id,
+      identityId: identity.id,
+      purpose: effectiveIdentityPurpose(identity),
+      h11AccessGateId: result.invite.h11AccessGateId ?? null,
+      assignmentId: result.invite.assignmentId ?? null,
+      expiresAt: result.invite.expiresAt,
+    });
     return { invite: publicInvite(result.invite), token: result.token };
   }
 
@@ -111,6 +188,10 @@ export class StagingWorkflowService {
     const state = await this.state();
     const invite = state.invites.find((candidate) => candidate.id === inviteId);
     if (!invite) throw serviceError(404, "invite_not_found", "Invite not found.");
+    const identity = activeIdentity(state, invite.identityId);
+    const now = this.now();
+    const gate = resolveInviteAccessGate(state, identity, now, expiresInHours);
+    assertNoActiveH11Invite(state, identity.id, gate.metadata.h11AccessGateId ?? null, now, invite.id);
     if (!invite.revokedAt && !invite.usedAt) {
       await this.store.append(event("invite.revoked", invite.id, actor.identity.id, {
         inviteId,
@@ -118,12 +199,22 @@ export class StagingWorkflowService {
         revokedAt: this.now().toISOString(),
       }, this.now().toISOString()));
     }
-    const replacement = await this.createInviteInternal({ identityId: invite.identityId, actorId: actor.identity.id, expiresInHours });
+    const replacement = await this.createInviteInternal({
+      identityId: invite.identityId,
+      actorId: actor.identity.id,
+      expiresInHours,
+      expiresAt: gate.expiresAt,
+      metadata: gate.metadata,
+    });
     await this.store.append(event("invite.replaced", invite.id, actor.identity.id, {
       inviteId,
       replacementInviteId: replacement.invite.id,
     }, this.now().toISOString()));
-    await this.audit(actor.identity.id, "invite.replaced", { inviteId, replacementInviteId: replacement.invite.id });
+    await this.audit(actor.identity.id, "invite.replaced", {
+      inviteId,
+      replacementInviteId: replacement.invite.id,
+      h11AccessGateId: replacement.invite.h11AccessGateId ?? null,
+    });
     return { invite: publicInvite(replacement.invite), token: replacement.token };
   }
 
@@ -137,20 +228,31 @@ export class StagingWorkflowService {
     if (invite.usedAt) throw serviceError(409, "used_invite", "The invitation has already been used. Ask the operator for a replacement.");
     if (new Date(invite.expiresAt) <= now) throw serviceError(401, "expired_invite", "The invitation has expired.");
     const identity = activeIdentity(state, invite.identityId);
+    const h11Access = validateInviteAccessGateAtRedemption(state, invite, identity, now, this.sessionTtlHours);
     const sessionToken = makeToken();
     const session = {
       id: randomUUID(),
       identityId: identity.id,
       tokenHash: sha256Token(sessionToken),
       createdAt: now.toISOString(),
-      expiresAt: addHours(now, this.sessionTtlHours).toISOString(),
+      expiresAt: h11Access?.expiresAt ?? addHours(now, this.sessionTtlHours).toISOString(),
       revokedAt: null,
+      purpose: effectiveIdentityPurpose(identity),
+      h11AccessGateId: h11Access?.h11AccessGateId ?? null,
+      assignmentId: h11Access?.assignmentId ?? null,
+      packetHash: h11Access?.packetHash ?? null,
       userAgentHash: userAgent ? createHash("sha256").update(String(userAgent)).digest("hex") : null,
     };
     await this.store.appendMany([
       event("invite.redeemed", invite.id, identity.id, { inviteId: invite.id, usedAt: now.toISOString(), sessionId: session.id }, now.toISOString()),
       event("session.created", session.id, identity.id, session, now.toISOString()),
-      event("audit.recorded", randomUUID(), identity.id, { action: "invite.redeemed", subjectId: invite.id }, now.toISOString()),
+      event("audit.recorded", randomUUID(), identity.id, {
+        action: "invite.redeemed",
+        subjectId: invite.id,
+        h11AccessGateId: session.h11AccessGateId,
+        assignmentId: session.assignmentId,
+        sessionExpiresAt: session.expiresAt,
+      }, now.toISOString()),
     ]);
     return { sessionToken, session: publicSession(session), identity: publicIdentity(identity) };
   }
@@ -208,6 +310,125 @@ export class StagingWorkflowService {
     if (identity.role === "adjudicator") return this.adjudicatorWorkspace(state, identity);
     if (identity.role === "operator") return this.operatorWorkspace(state, identity);
     throw serviceError(403, "unsupported_role", "This role has no staging workspace.");
+  }
+
+
+
+  async recordH11AccessGate({ actorSessionToken, identityId, assignmentId, payload, expectedReleaseSha = null }) {
+    const actor = await this.requireRole(actorSessionToken, "operator");
+    const state = await this.state();
+    const identity = activeIdentity(state, identityId);
+    if (identity.role !== "rater" || effectiveIdentityPurpose(identity) !== "h11_human_usability") {
+      throw serviceError(400, "wrong_identity_purpose", "H-11 access gates apply only to qualified human usability-rater identities.");
+    }
+    const assignment = state.assignments.find((candidate) => candidate.id === assignmentId);
+    if (!assignment) throw serviceError(404, "assignment_not_found", "Assignment not found.");
+    if (assignment.identityId !== identity.id || assignment.kind !== "initial") {
+      throw serviceError(400, "wrong_assignment", "The access gate must bind the participant's initial synthetic assignment.");
+    }
+    if (assignment.status !== "assigned") {
+      throw serviceError(409, "assignment_not_open", "The H-11 access gate must be recorded before the initial assignment is completed or withdrawn.");
+    }
+
+    const normalized = normalizeH11AccessGate(payload, this.now());
+    if (expectedReleaseSha && normalized.externalPreflight.releaseSha !== String(expectedReleaseSha).trim().toLowerCase()) {
+      throw serviceError(409, "h11_release_sha_mismatch", "The recorded release SHA does not match the exact runtime commit serving this protected staging environment.");
+    }
+    const prior = latestH11AccessGate(state, identity.id, assignment.id);
+    if (prior && prior.packetHash === assignment.packetHash && JSON.stringify(prior.payload) === JSON.stringify(normalized)) {
+      return { record: publicH11AccessGate(prior), replay: true };
+    }
+
+    const recordedAt = this.now().toISOString();
+    const record = {
+      id: randomUUID(),
+      identityId: identity.id,
+      assignmentId: assignment.id,
+      packetHash: assignment.packetHash,
+      version: H11_ACCESS_GATE_VERSION,
+      payload: normalized,
+      supersedesId: prior?.id ?? null,
+      recordedAt,
+      validUntil: normalized.externalPreflight.shareLinkExpiresAt,
+    };
+    const sessionsToRevoke = state.sessions.filter((session) => (
+      session.identityId === identity.id
+      && !session.revokedAt
+      && new Date(session.expiresAt) > new Date(recordedAt)
+    ));
+    await this.store.appendMany([
+      event("h11.access.gate.recorded", record.id, actor.identity.id, record, recordedAt),
+      ...sessionsToRevoke.map((session) => event("session.revoked", session.id, actor.identity.id, {
+        sessionId: session.id,
+        revokedAt: recordedAt,
+        reason: "h11_access_gate_superseded",
+      }, recordedAt)),
+      event("audit.recorded", randomUUID(), actor.identity.id, {
+        action: "h11.access.gate.recorded",
+        subjectId: record.id,
+        identityId: identity.id,
+        assignmentId: assignment.id,
+        packetHash: assignment.packetHash,
+        version: record.version,
+        supersedesId: record.supersedesId,
+        invalidatedSessionIds: sessionsToRevoke.map((session) => session.id),
+      }, recordedAt),
+    ]);
+    return {
+      record: publicH11AccessGate(record),
+      replay: false,
+      invalidatedSessions: sessionsToRevoke.map((session) => session.id),
+    };
+  }
+
+  async recordParticipantEvidence({ sessionToken, assignmentId, kind, payload }) {
+    const authenticated = await this.requireRole(sessionToken, "rater");
+    const state = await this.state();
+    const assignment = ownedAssignment(state, assignmentId, authenticated.identity.id);
+    if (assignment.kind !== "initial") {
+      throw serviceError(400, "wrong_assignment_kind", "H-11 consent and debrief records attach to the initial synthetic assignment.");
+    }
+    if (!PARTICIPANT_EVIDENCE_KINDS.has(kind)) {
+      throw serviceError(400, "invalid_evidence_kind", "Evidence kind must be consent or debrief.");
+    }
+    if (kind === "debrief" && !TERMINAL_ASSIGNMENT_STATES.has(assignment.status)) {
+      throw serviceError(409, "assignment_not_terminal", "Submit or withdraw the synthetic assignment before recording the debrief.");
+    }
+
+    const normalized = normalizeParticipantEvidence(kind, payload);
+    const existing = state.participantEvidence.find((record) => (
+      record.assignmentId === assignmentId
+      && record.identityId === authenticated.identity.id
+      && record.kind === kind
+    ));
+    if (existing) {
+      if (existing.version !== normalized.version || JSON.stringify(existing.payload) !== JSON.stringify(normalized.payload)) {
+        throw serviceError(409, "participant_evidence_locked", "This participant evidence record is immutable and has already been submitted.");
+      }
+      return { record: publicParticipantEvidence(existing), replay: true };
+    }
+
+    const submittedAt = this.now().toISOString();
+    const record = {
+      id: randomUUID(),
+      assignmentId,
+      identityId: authenticated.identity.id,
+      kind,
+      version: normalized.version,
+      payload: normalized.payload,
+      submittedAt,
+    };
+    await this.store.appendMany([
+      event("participant.evidence.recorded", record.id, authenticated.identity.id, record, submittedAt),
+      event("audit.recorded", randomUUID(), authenticated.identity.id, {
+        action: "participant.evidence.recorded",
+        subjectId: record.id,
+        assignmentId,
+        kind,
+        version: record.version,
+      }, submittedAt),
+    ]);
+    return { record: publicParticipantEvidence(record), replay: false };
   }
 
   async saveDraft({ sessionToken, assignmentId, critiqueId, expectedVersion, rating }) {
@@ -486,7 +707,9 @@ export class StagingWorkflowService {
     if (!allowRevoked && session.revokedAt) return null;
     if (!allowExpired && new Date(session.expiresAt) <= this.now()) return null;
     const identity = state.identities.find((candidate) => candidate.id === session.identityId && candidate.status === "active");
-    return identity ? { session, identity, state } : null;
+    if (!identity) return null;
+    if (!allowExpired && !allowRevoked && !activeSessionMatchesCurrentAccessGate(state, session, identity, this.now())) return null;
+    return { session, identity, state };
   }
 
   async requireSession(sessionToken) {
@@ -501,7 +724,7 @@ export class StagingWorkflowService {
     return result;
   }
 
-  async createInviteInternal({ identityId, actorId, expiresInHours }) {
+  async createInviteInternal({ identityId, actorId, expiresInHours, expiresAt = null, metadata = {} }) {
     const token = makeToken();
     const createdAt = this.now();
     const invite = {
@@ -509,10 +732,11 @@ export class StagingWorkflowService {
       identityId,
       tokenHash: sha256Token(token),
       createdAt: createdAt.toISOString(),
-      expiresAt: addHours(createdAt, clampHours(expiresInHours, 1, 168)).toISOString(),
+      expiresAt: expiresAt ?? addHours(createdAt, clampHours(expiresInHours, 1, 168)).toISOString(),
       usedAt: null,
       revokedAt: null,
       replacementInviteId: null,
+      ...metadata,
     };
     await this.store.append(event("invite.created", invite.id, actorId, invite, invite.createdAt));
     return { invite, token };
@@ -542,6 +766,9 @@ export class StagingWorkflowService {
           receipt: state.submissionReceipts.find((receipt) => receipt.assignmentId === assignment.id) ?? null,
           correctionRequests: state.correctionRequests.filter((request) => request.assignmentId === assignment.id),
           withdrawalRequests: state.withdrawalRequests.filter((request) => request.assignmentId === assignment.id),
+          participantEvidence: state.participantEvidence
+            .filter((record) => record.assignmentId === assignment.id && record.identityId === identity.id)
+            .map(publicParticipantEvidence),
         };
       }),
     };
@@ -573,6 +800,8 @@ export class StagingWorkflowService {
       correctionRequests: state.correctionRequests,
       withdrawalRequests: state.withdrawalRequests,
       adjudicationCases: state.adjudicationCases.map(publicAdjudicationCase),
+      participantEvidence: state.participantEvidence.map(publicParticipantEvidence),
+      h11AccessGates: state.h11AccessGates.map(publicH11AccessGate),
       chain: state.chain,
     };
   }
@@ -626,7 +855,7 @@ export function reduceStagingEvents(events) {
   const state = {
     identities: [], invites: [], sessions: [], positions: [], critiques: [], assignments: [], drafts: [], ratings: [],
     submissionReceipts: [], correctionRequests: [], withdrawalRequests: [], adjudicationCases: [], adjudicationReviews: [],
-    labelSnapshots: [], auditEvents: [],
+    participantEvidence: [], h11AccessGates: [], labelSnapshots: [], auditEvents: [],
     chain: { events: events.length, headHash: events.at(-1)?.eventHash ?? "0".repeat(64) },
   };
   const upsert = (collection, value, key = "id") => {
@@ -657,6 +886,8 @@ export function reduceStagingEvents(events) {
       case "correction.requested": upsert(state.correctionRequests, payload); break;
       case "correction.resolved": upsert(state.correctionRequests, { id: payload.requestId, status: payload.action === "reject" ? "rejected" : "approved", resolution: payload }); break;
       case "withdrawal.requested": upsert(state.withdrawalRequests, payload); break;
+      case "participant.evidence.recorded": upsert(state.participantEvidence, payload); break;
+      case "h11.access.gate.recorded": upsert(state.h11AccessGates, payload); break;
       case "adjudication.opened": upsert(state.adjudicationCases, payload); break;
       case "adjudication.reviewed": upsert(state.adjudicationReviews, payload); break;
       case "adjudication.closed": upsert(state.adjudicationCases, { id: payload.caseId, status: payload.status, closedAt: payload.closedAt, closureNotes: payload.notes }); break;
@@ -695,6 +926,321 @@ function defaultRehearsalFixture() {
   };
 }
 
+
+function normalizeIdentityPurpose({ role, purpose, email }) {
+  let value = String(purpose ?? "").trim();
+  if (!value) {
+    if (role === "rater" && isSyntheticEmail(email)) value = "synthetic_automation";
+    else if (role === "adjudicator" && isSyntheticEmail(email)) value = "synthetic_adjudication";
+    else if (role === "operator") value = "controlled_operator";
+  }
+  if (!IDENTITY_PURPOSES.has(value)) {
+    throw serviceError(400, "identity_purpose_required", "Choose an explicit controlled identity purpose.");
+  }
+  const allowed = {
+    rater: new Set(["synthetic_automation", "h11_human_usability"]),
+    adjudicator: new Set(["synthetic_adjudication"]),
+    operator: new Set(["controlled_operator"]),
+  };
+  if (!allowed[role]?.has(value)) throw serviceError(400, "identity_purpose_role_mismatch", "The identity purpose does not match the selected role.");
+  if (["synthetic_automation", "synthetic_adjudication"].includes(value) && !isSyntheticEmail(email)) {
+    throw serviceError(400, "synthetic_identity_email_required", "Synthetic automation identities must use a non-deliverable .invalid email address.");
+  }
+  if (value === "h11_human_usability" && isSyntheticEmail(email)) {
+    throw serviceError(400, "human_identity_deliverable_email_required", "Qualified human H-11 identities may not use a synthetic .invalid email address.");
+  }
+  return value;
+}
+
+function normalizeH11ParticipantAlias(value) {
+  const alias = String(value ?? "").trim();
+  if (!/^H-11 participant [A-Za-z0-9_-]{1,24}$/u.test(alias)) {
+    throw serviceError(400, "h11_pseudonym_required", "Use a non-identifying alias in the form 'H-11 participant A', 'H-11 participant B', or another short slot code. Do not enter a person's name.");
+  }
+  return alias;
+}
+
+function effectiveIdentityPurpose(identity) {
+  if (identity?.purpose) return identity.purpose;
+  if (identity?.role === "rater" && isSyntheticEmail(identity.email)) return "synthetic_automation";
+  if (identity?.role === "adjudicator" && isSyntheticEmail(identity.email)) return "synthetic_adjudication";
+  if (identity?.role === "operator") return "controlled_operator";
+  return "unknown";
+}
+
+function isSyntheticEmail(email) {
+  return String(email ?? "").toLowerCase().endsWith(".invalid");
+}
+
+function normalizeH11AccessGate(payload = {}, now = new Date()) {
+  const screening = payload.screening ?? {};
+  const finalConsent = payload.finalConsent ?? {};
+  const session = payload.session ?? {};
+  const external = payload.externalPreflight ?? {};
+
+  const normalized = {
+    recipientSlot: requireChoice(payload.recipientSlot, ["A", "B", "fallback"], "Recipient slot"),
+    screening: {
+      identityConfirmed: requireGateTrue(screening.identityConfirmed, "Confirm the intended participant's identity."),
+      professionalRouteConfirmed: requireGateTrue(screening.professionalRouteConfirmed, "Confirm the professional contact route."),
+      exactSyntheticItemExposure: requireChoice(screening.exactSyntheticItemExposure, H11_EXPOSURE_VALUES, "Exact synthetic-item exposure"),
+      stagingInterfaceExposure: requireChoice(screening.stagingInterfaceExposure, H11_EXPOSURE_VALUES, "Staging-interface exposure"),
+      conflictStatus: requireChoice(screening.conflictStatus, H11_CONFLICT_VALUES, "Conflict or institutional restriction"),
+      conflictNotes: optionalText(screening.conflictNotes, 2000),
+      countryOfTaxResidence: requireText(screening.countryOfTaxResidence, 2, 100, "Country of tax residence"),
+      countryOfWorkForSession: requireText(screening.countryOfWorkForSession, 2, 100, "Country of work for the session"),
+      sanctionsScreening: requireChoice(screening.sanctionsScreening, H11_CHECK_VALUES, "Sanctions screening"),
+      honorariumEligibility: requireChoice(screening.honorariumEligibility, H11_CHECK_VALUES, "Honorarium eligibility"),
+      preferredPaymentRail: requireChoice(screening.preferredPaymentRail, H11_PAYMENT_RAILS, "Preferred payment rail"),
+      accessibilityOrDeviceNeeds: optionalText(screening.accessibilityOrDeviceNeeds, 2000),
+      operatorCoverageAvailable: requireGateTrue(screening.operatorCoverageAvailable, "Confirm live operator coverage for the session window."),
+      screeningOutcome: requireChoice(screening.screeningOutcome, H11_SCREENING_VALUES, "Screening outcome"),
+    },
+    finalConsent: {
+      scopeAndDataTermsRead: requireGateTrue(finalConsent.scopeAndDataTermsRead, "Record the participant's confirmation that the H-11 scope and data terms were read."),
+      syntheticScoresExcluded: requireGateTrue(finalConsent.syntheticScoresExcluded, "Record confirmation that synthetic scores are excluded from research use."),
+      auditTrailAndNotesConsented: requireGateTrue(finalConsent.auditTrailAndNotesConsented, "Record consent to the private audit trail and de-identified internal usability notes."),
+      voluntaryAndMayStop: requireGateTrue(finalConsent.voluntaryAndMayStop, "Record confirmation that participation is voluntary and may be stopped."),
+      confirmationReference: requireText(finalConsent.confirmationReference, 12, 240, "Consent confirmation reference"),
+    },
+    session: {
+      startAt: requireIsoDate(session.startAt, "Session start"),
+      endAt: requireIsoDate(session.endAt, "Session end"),
+      timeZone: requireText(session.timeZone, 2, 100, "Session time zone"),
+      supportRouteConfirmed: requireGateTrue(session.supportRouteConfirmed, "Confirm the private live support route."),
+    },
+    externalPreflight: {
+      releaseSha: requireReleaseSha(external.releaseSha),
+      deploymentId: requireDeploymentId(external.deploymentId),
+      schemaVersion: requireInteger(external.schemaVersion, 4, 4, "Schema version"),
+      syntheticOnlyPurposeConfirmed: requireGateTrue(external.syntheticOnlyPurposeConfirmed, "Confirm the synthetic_rehearsal_only purpose."),
+      researchRatingsAuthorizedFalseConfirmed: requireGateTrue(external.researchRatingsAuthorizedFalseConfirmed, "Confirm research_ratings_authorized=false."),
+      noOpenP0P1Defect: requireGateTrue(external.noOpenP0P1Defect, "Confirm that no P0 or P1 defect or incident is open."),
+      shareLinkCreatedAt: requireIsoDate(external.shareLinkCreatedAt, "Share-link creation time"),
+      shareLinkCreatedWithin23Hours: requireGateTrue(external.shareLinkCreatedWithin23Hours, "Confirm the share link was created no more than 23 hours before the session."),
+      signedOutIncognitoJourneyPassed: requireGateTrue(external.signedOutIncognitoJourneyPassed, "Confirm the normal signed-out or incognito external journey passed."),
+      noOperatorOrCrossIdentityExposure: requireGateTrue(external.noOperatorOrCrossIdentityExposure, "Confirm the external path exposed no operator session, other identity, assignment, or reusable token."),
+      controlIdentityJourneyPassed: requireGateTrue(external.controlIdentityJourneyPassed, "Confirm the combined external journey passed with a separate synthetic control identity."),
+      shareLinkExpiresAt: requireIsoDate(external.shareLinkExpiresAt, "Share-link expiry"),
+    },
+    ownerAuthorizationReference: requireText(payload.ownerAuthorizationReference, 12, 240, "Owner access-authorization reference"),
+    notes: optionalText(payload.notes, 4000),
+  };
+
+  if (normalized.screening.conflictStatus !== "none_declared") {
+    throw serviceError(409, "h11_conflict_not_cleared", "Conflict or institutional-restriction review must be cleared before access authorization.");
+  }
+  if (normalized.screening.sanctionsScreening !== "pass" || normalized.screening.honorariumEligibility !== "pass") {
+    throw serviceError(409, "h11_eligibility_not_cleared", "Sanctions and honorarium-eligibility checks must both pass before access authorization.");
+  }
+  if (normalized.screening.screeningOutcome !== "pass") {
+    throw serviceError(409, "h11_screening_not_passed", "The recipient screening outcome must be pass before access authorization.");
+  }
+
+  const start = new Date(normalized.session.startAt);
+  const end = new Date(normalized.session.endAt);
+  const shareCreated = new Date(normalized.externalPreflight.shareLinkCreatedAt);
+  const shareExpiry = new Date(normalized.externalPreflight.shareLinkExpiresAt);
+  if (end <= start) throw serviceError(400, "invalid_session_window", "The H-11 session end must be after its start.");
+  if (end.getTime() - start.getTime() > 4 * 60 * 60 * 1000) {
+    throw serviceError(400, "invalid_session_window", "The H-11 protected session window may not exceed four hours.");
+  }
+  if (start.getTime() < now.getTime() - 15 * 60 * 1000) {
+    throw serviceError(409, "h11_session_window_stale", "The recorded H-11 session window has already begun too far in the past.");
+  }
+  if (start.getTime() > now.getTime() + 14 * 24 * 60 * 60 * 1000) {
+    throw serviceError(400, "h11_session_window_too_distant", "The H-11 session window must be within the next fourteen days.");
+  }
+  if (shareCreated.getTime() > now.getTime() + 5 * 60 * 1000) {
+    throw serviceError(400, "h11_share_link_created_in_future", "The recorded share-link creation time is implausibly in the future.");
+  }
+  if (now.getTime() - shareCreated.getTime() > 23 * 60 * 60 * 1000) {
+    throw serviceError(409, "h11_share_link_stale", "The protected share link was created more than 23 hours ago; create and preflight a fresh link.");
+  }
+  if (shareExpiry <= shareCreated) {
+    throw serviceError(400, "h11_share_link_window_invalid", "The protected share-link expiry must be after its recorded creation time.");
+  }
+  if (shareExpiry < end) {
+    throw serviceError(409, "h11_share_link_expires_too_early", "The protected share link must remain valid through the complete session window.");
+  }
+  if (shareExpiry.getTime() > now.getTime() + 23 * 60 * 60 * 1000) {
+    throw serviceError(409, "h11_share_link_too_long", "The recorded share-link expiry may not exceed the approved 23-hour limit.");
+  }
+  return normalized;
+}
+
+function requireGateTrue(value, message) {
+  if (value !== true) throw serviceError(400, "h11_access_gate_incomplete", message);
+  return true;
+}
+
+function requireIsoDate(value, label) {
+  const date = new Date(String(value ?? ""));
+  if (!Number.isFinite(date.getTime())) throw serviceError(400, "invalid_datetime", `${label} must be a valid ISO date-time.`);
+  return date.toISOString();
+}
+
+function requireReleaseSha(value) {
+  const sha = String(value ?? "").trim().toLowerCase();
+  if (!/^[a-f0-9]{40}$/u.test(sha)) throw serviceError(400, "invalid_release_sha", "Release SHA must be the exact 40-character Git commit SHA.");
+  return sha;
+}
+
+function requireDeploymentId(value) {
+  const deploymentId = String(value ?? "").trim();
+  if (!/^dpl_[A-Za-z0-9]{12,156}$/u.test(deploymentId)) throw serviceError(400, "invalid_deployment_id", "Deployment ID must be an exact Vercel dpl_ identifier.");
+  return deploymentId;
+}
+
+function latestH11AccessGate(state, identityId, assignmentId) {
+  const candidates = state.h11AccessGates
+    .filter((record) => record.identityId === identityId && record.assignmentId === assignmentId);
+  return candidates.at(-1) ?? null;
+}
+
+function validateRaterIdentityPurpose(identity, errorStatus) {
+  const purpose = effectiveIdentityPurpose(identity);
+  if (identity.role !== "rater") return purpose;
+  if (purpose === "synthetic_automation") {
+    if (!isSyntheticEmail(identity.email)) {
+      throw serviceError(errorStatus, "synthetic_identity_email_required", "Synthetic automation access requires a non-deliverable .invalid identity.");
+    }
+    return purpose;
+  }
+  if (purpose === "h11_human_usability") {
+    if (identity.email || identity.contactRouteValidated !== true || identity.directContactPersisted !== false) {
+      throw serviceError(errorStatus, "h11_identity_not_minimized", "Qualified human H-11 access requires a pseudonymous identity whose deliverable contact route was validated transiently and never persisted in the append-only ledger.");
+    }
+    normalizeH11ParticipantAlias(identity.displayName);
+    return purpose;
+  }
+  throw serviceError(errorStatus, "identity_purpose_required", "Unclassified real-email rater access is blocked. Create or repair an explicitly H-11-classified identity before proceeding.");
+}
+
+function assertNoActiveH11Invite(state, identityId, h11AccessGateId, now, excludedInviteId = null) {
+  if (!h11AccessGateId) return;
+  const existing = state.invites.find((invite) => (
+    invite.id !== excludedInviteId
+    && invite.identityId === identityId
+    && invite.h11AccessGateId === h11AccessGateId
+    && !invite.usedAt
+    && !invite.revokedAt
+    && new Date(invite.expiresAt) > now
+  ));
+  if (existing) {
+    throw serviceError(409, "h11_active_invite_exists", "An unused H-11 invitation already exists for this exact access gate. Revoke or replace it rather than issuing a second valid token.", {
+      inviteId: existing.id,
+      expiresAt: existing.expiresAt,
+    });
+  }
+  const activeSession = state.sessions.find((session) => (
+    session.identityId === identityId
+    && !session.revokedAt
+    && new Date(session.expiresAt) > now
+  ));
+  if (activeSession) {
+    throw serviceError(409, "h11_active_session_exists", "An authenticated H-11 session is already active. Supersede the gate to invalidate it before issuing another invitation.", {
+      sessionId: activeSession.id,
+      expiresAt: activeSession.expiresAt,
+    });
+  }
+}
+
+function resolveInviteAccessGate(state, identity, now, expiresInHours) {
+  const purpose = validateRaterIdentityPurpose(identity, 409);
+  if (identity.role !== "rater" || purpose === "synthetic_automation") return { expiresAt: null, metadata: {} };
+  const assignment = state.assignments
+    .filter((candidate) => candidate.identityId === identity.id && candidate.kind === "initial" && candidate.status === "assigned")
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  if (!assignment) throw serviceError(409, "h11_assignment_required", "Create the participant's exact initial synthetic assignment before issuing access.");
+  const preflight = latestH11AccessGate(state, identity.id, assignment.id);
+  if (!preflight) throw serviceError(409, "h11_access_gate_required", "Record the complete recipient screening, final consent, session, and external access gate before issuing an invitation.");
+  if (preflight.version !== H11_ACCESS_GATE_VERSION) throw serviceError(409, "h11_access_gate_version_stale", "Record a fresh access gate under the current H-11 access-control contract before issuing an invitation.");
+  if (preflight.packetHash !== assignment.packetHash) throw serviceError(409, "h11_packet_gate_mismatch", "The access gate does not match the current assignment packet.");
+  const end = new Date(preflight.payload.session.endAt);
+  const shareExpiry = new Date(preflight.payload.externalPreflight.shareLinkExpiresAt);
+  const latestValidEnd = new Date(Math.min(end.getTime(), shareExpiry.getTime()));
+  if (latestValidEnd <= now) throw serviceError(409, "h11_access_gate_expired", "The H-11 access gate or protected share link has expired.");
+  const requestedExpiry = addHours(now, clampHours(expiresInHours, 1, 168));
+  if (requestedExpiry > latestValidEnd) {
+    const remainingHours = Math.max(0, (latestValidEnd.getTime() - now.getTime()) / (60 * 60 * 1000));
+    throw serviceError(409, "h11_invite_exceeds_window", "The application invitation cannot outlive the approved session or share-link window.", { remainingHours });
+  }
+  return {
+    expiresAt: requestedExpiry.toISOString(),
+    metadata: {
+      purpose: "h11_human_usability",
+      h11AccessGateId: preflight.id,
+      assignmentId: assignment.id,
+      packetHash: assignment.packetHash,
+    },
+  };
+}
+
+function validateInviteAccessGateAtRedemption(state, invite, identity, now, sessionTtlHours) {
+  const purpose = validateRaterIdentityPurpose(identity, 401);
+  if (identity.role !== "rater") {
+    if (invite.h11AccessGateId) throw serviceError(401, "h11_identity_mismatch", "A non-rater identity cannot redeem an H-11 participant invitation.");
+    return null;
+  }
+  if (purpose === "synthetic_automation") {
+    if (invite.h11AccessGateId) throw serviceError(401, "h11_identity_mismatch", "A synthetic automation identity cannot redeem a human H-11 participant invitation.");
+    return null;
+  }
+  if (!invite.h11AccessGateId) {
+    throw serviceError(401, "h11_access_gate_required", "Qualified human H-11 access requires an invitation bound to the complete access gate.");
+  }
+  const assignment = state.assignments.find((candidate) => candidate.id === invite.assignmentId);
+  if (!assignment || assignment.identityId !== identity.id || assignment.kind !== "initial") {
+    throw serviceError(401, "h11_assignment_mismatch", "The invitation is not bound to the participant's current initial assignment.");
+  }
+  const latest = latestH11AccessGate(state, identity.id, assignment.id);
+  if (!latest || latest.id !== invite.h11AccessGateId) {
+    throw serviceError(401, "h11_access_gate_superseded", "The access gate was replaced; ask the operator for a fresh invitation.");
+  }
+  if (latest.version !== H11_ACCESS_GATE_VERSION) {
+    throw serviceError(401, "h11_access_gate_version_stale", "The invitation was issued under an obsolete H-11 access-control contract.");
+  }
+  if (latest.packetHash !== assignment.packetHash || invite.packetHash !== assignment.packetHash) {
+    throw serviceError(401, "h11_packet_gate_mismatch", "The invitation packet no longer matches the approved access gate.");
+  }
+  const start = new Date(latest.payload.session.startAt);
+  const end = new Date(latest.payload.session.endAt);
+  const shareExpiry = new Date(latest.payload.externalPreflight.shareLinkExpiresAt);
+  const inviteExpiry = new Date(invite.expiresAt);
+  if (now < start) throw serviceError(403, "h11_access_window_not_open", "The protected H-11 session window has not opened yet.");
+  if (now >= end || now >= shareExpiry || now >= inviteExpiry) throw serviceError(401, "h11_access_window_closed", "The protected H-11 session, share-link, or invitation window has closed.");
+  const ordinarySessionExpiry = addHours(now, sessionTtlHours);
+  return {
+    expiresAt: new Date(Math.min(
+      ordinarySessionExpiry.getTime(),
+      end.getTime(),
+      shareExpiry.getTime(),
+      inviteExpiry.getTime(),
+    )).toISOString(),
+    h11AccessGateId: latest.id,
+    assignmentId: assignment.id,
+    packetHash: assignment.packetHash,
+  };
+}
+
+function activeSessionMatchesCurrentAccessGate(state, session, identity, now) {
+  if (identity.role !== "rater") return !session.h11AccessGateId;
+  const purpose = effectiveIdentityPurpose(identity);
+  if (purpose === "synthetic_automation") return isSyntheticEmail(identity.email) && !session.h11AccessGateId;
+  if (purpose !== "h11_human_usability") return false;
+  if (identity.email || identity.contactRouteValidated !== true || identity.directContactPersisted !== false) return false;
+  if (!session.h11AccessGateId || !session.assignmentId || !session.packetHash) return false;
+  const assignment = state.assignments.find((candidate) => candidate.id === session.assignmentId);
+  if (!assignment || assignment.identityId !== identity.id || assignment.packetHash !== session.packetHash) return false;
+  const latest = latestH11AccessGate(state, identity.id, assignment.id);
+  if (!latest || latest.id !== session.h11AccessGateId || latest.version !== H11_ACCESS_GATE_VERSION) return false;
+  if (latest.packetHash !== session.packetHash) return false;
+  const end = new Date(latest.payload.session.endAt);
+  const shareExpiry = new Date(latest.payload.externalPreflight.shareLinkExpiresAt);
+  return now < end && now < shareExpiry;
+}
+
 function normalizeRating(rating = {}) {
   return {
     scores: Object.fromEntries(SCORE_DIMENSIONS.map((dimension) => [dimension, roundScore(rating?.scores?.[dimension])])),
@@ -708,6 +1254,78 @@ function normalizeRating(rating = {}) {
     verificationStatus: rating.verificationStatus,
     requestReview: Boolean(rating.requestReview),
   };
+}
+
+
+function normalizeParticipantEvidence(kind, payload = {}) {
+  if (kind === "consent") {
+    const normalized = {
+      scopeAndDataTermsRead: requireTrue(payload.scopeAndDataTermsRead, "Confirm that the scope and data terms were read."),
+      syntheticScoresExcluded: requireTrue(payload.syntheticScoresExcluded, "Confirm that the synthetic scores are excluded from research use."),
+      auditTrailAndNotesConsented: requireTrue(payload.auditTrailAndNotesConsented, "Consent to the private audit trail and de-identified internal usability notes."),
+      voluntaryAndMayStop: requireTrue(payload.voluntaryAndMayStop, "Confirm that participation is voluntary and may be stopped."),
+    };
+    return { version: H11_CONSENT_VERSION, payload: normalized };
+  }
+
+  if (kind === "debrief") {
+    const normalized = {
+      centralityDefinition: requireText(payload.centralityDefinition, 20, 2000, "Centrality explanation"),
+      strengthDefinition: requireText(payload.strengthDefinition, 20, 2000, "Strength explanation"),
+      productImportance: requireText(payload.productImportance, 20, 2000, "Strength-times-centrality explanation"),
+      lowClarityTreatment: requireText(payload.lowClarityTreatment, 20, 2000, "Low-clarity explanation"),
+      immutableInitialsReason: requireText(payload.immutableInitialsReason, 20, 2000, "Immutable-initials explanation"),
+      workflowClarity: requireScale(payload.workflowClarity, "Workflow clarity"),
+      autosaveConfidence: requireScale(payload.autosaveConfidence, "Autosave confidence"),
+      resumeConfidence: requireScale(payload.resumeConfidence, "Resume confidence"),
+      lockedStateClarity: requireScale(payload.lockedStateClarity, "Locked-state clarity"),
+      recoveryPathClarity: requireScale(payload.recoveryPathClarity, "Recovery-path clarity"),
+      researchBoundaryClarity: requireScale(payload.researchBoundaryClarity, "Research-boundary clarity"),
+      sawUnexpectedMetadata: requireBoolean(payload.sawUnexpectedMetadata, "Unexpected-metadata observation"),
+      sawNonSyntheticMaterial: requireBoolean(payload.sawNonSyntheticMaterial, "Non-synthetic-material observation"),
+      deviceClass: requireChoice(payload.deviceClass, ["desktop", "narrow_mobile", "tablet", "other"], "Device class"),
+      browserFamily: requireChoice(payload.browserFamily, ["chrome", "safari", "firefox", "edge", "other"], "Browser"),
+      recoveryPath: requireChoice(payload.recoveryPath, ["correction", "withdrawal", "controlled_failure", "none"], "Recovery path"),
+      sessionDurationMinutes: requireInteger(payload.sessionDurationMinutes, 1, 240, "Session duration"),
+      mostConfusing: optionalText(payload.mostConfusing, 4000),
+      improvementSuggestion: requireText(payload.improvementSuggestion, 10, 4000, "Improvement suggestion"),
+    };
+    return { version: H11_DEBRIEF_VERSION, payload: normalized };
+  }
+
+  throw serviceError(400, "invalid_evidence_kind", "Evidence kind must be consent or debrief.");
+}
+
+function requireTrue(value, message) {
+  if (value !== true) throw serviceError(400, "consent_incomplete", message);
+  return true;
+}
+
+function requireBoolean(value, label) {
+  if (typeof value !== "boolean") throw serviceError(400, "invalid_boolean", `${label} must be explicitly answered.`);
+  return value;
+}
+
+function requireScale(value, label) {
+  return requireInteger(value, 1, 5, label);
+}
+
+function requireInteger(value, minimum, maximum, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < minimum || number > maximum) {
+    throw serviceError(400, "invalid_integer", `${label} must be an integer from ${minimum} to ${maximum}.`);
+  }
+  return number;
+}
+
+function requireChoice(value, allowed, label) {
+  const choice = String(value ?? "");
+  if (!allowed.includes(choice)) throw serviceError(400, "invalid_choice", `${label} is invalid.`);
+  return choice;
+}
+
+function optionalText(value, maximum) {
+  return String(value ?? "").trim().slice(0, maximum);
 }
 
 function roundScore(value) {
@@ -759,11 +1377,31 @@ function ownedAssignment(state, assignmentId, identityId) {
 }
 
 function publicIdentity(identity) {
-  return identity ? { id: identity.id, role: identity.role, displayName: identity.displayName, status: identity.status } : null;
+  return identity ? {
+    id: identity.id,
+    role: identity.role,
+    purpose: effectiveIdentityPurpose(identity),
+    displayName: identity.displayName,
+    contactRouteValidated: identity.contactRouteValidated === true,
+    directContactPersisted: identity.directContactPersisted !== false,
+    status: identity.status,
+  } : null;
 }
 
 function publicInvite(invite) {
-  return { id: invite.id, identityId: invite.identityId, createdAt: invite.createdAt, expiresAt: invite.expiresAt, usedAt: invite.usedAt, revokedAt: invite.revokedAt, replacementInviteId: invite.replacementInviteId ?? null };
+  return {
+    id: invite.id,
+    identityId: invite.identityId,
+    purpose: invite.purpose ?? null,
+    h11AccessGateId: invite.h11AccessGateId ?? null,
+    assignmentId: invite.assignmentId ?? null,
+    packetHash: invite.packetHash ?? null,
+    createdAt: invite.createdAt,
+    expiresAt: invite.expiresAt,
+    usedAt: invite.usedAt,
+    revokedAt: invite.revokedAt,
+    replacementInviteId: invite.replacementInviteId ?? null,
+  };
 }
 
 function publicSession(session) {
@@ -790,6 +1428,32 @@ function publicAdjudicationCase(adjudicationCase) {
   return { id: adjudicationCase.id, positionId: adjudicationCase.positionId, trigger: adjudicationCase.trigger, reason: adjudicationCase.reason, triggerDetail: adjudicationCase.triggerDetail ?? [], status: adjudicationCase.status, createdAt: adjudicationCase.createdAt, closedAt: adjudicationCase.closedAt ?? null };
 }
 
+function publicH11AccessGate(record) {
+  return record ? {
+    id: record.id,
+    identityId: record.identityId,
+    assignmentId: record.assignmentId,
+    packetHash: record.packetHash,
+    version: record.version,
+    payload: structuredClone(record.payload),
+    supersedesId: record.supersedesId ?? null,
+    recordedAt: record.recordedAt,
+    validUntil: record.validUntil,
+  } : null;
+}
+
+function publicParticipantEvidence(record) {
+  return record ? {
+    id: record.id,
+    assignmentId: record.assignmentId,
+    identityId: record.identityId,
+    kind: record.kind,
+    version: record.version,
+    payload: structuredClone(record.payload),
+    submittedAt: record.submittedAt,
+  } : null;
+}
+
 function publicCounts(state) {
   return {
     identities: state.identities.length,
@@ -800,6 +1464,7 @@ function publicCounts(state) {
     openAdjudicationCases: state.adjudicationCases.filter((adjudicationCase) => adjudicationCase.status === "open").length,
     correctionRequests: state.correctionRequests.length,
     withdrawalRequests: state.withdrawalRequests.length,
+    h11AccessGates: state.h11AccessGates.length,
   };
 }
 

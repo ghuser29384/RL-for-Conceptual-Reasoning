@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "human-workflow-staging.spec.mjs",
+  testMatch: ["human-workflow-staging.spec.mjs", "participant-readiness.spec.mjs"],
   fullyParallel: false,
   workers: 1,
   retries: 0,

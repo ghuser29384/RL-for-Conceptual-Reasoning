@@ -16,8 +16,10 @@ const MUTATING_ACTIONS = new Set([
   "invite.revoke",
   "invite.replace",
   "assignment.create",
+  "h11.access.gate.record",
   "draft.save",
   "assignment.submit",
+  "participant.evidence.record",
   "correction.request",
   "withdrawal.request",
   "correction.resolve",
@@ -121,6 +123,14 @@ export function createStagingApiHandler(options = {}) {
           requireMethod(req, "POST");
           result = await runtime.service.createAssignment({ actorSessionToken: sessionToken, ...body });
           break;
+        case "h11.access.gate.record":
+          requireMethod(req, "POST");
+          result = await runtime.service.recordH11AccessGate({
+            actorSessionToken: sessionToken,
+            ...body,
+            expectedReleaseSha: runtime.environment.VERCEL_GIT_COMMIT_SHA ?? null,
+          });
+          break;
         case "draft.save":
           requireMethod(req, "PUT");
           result = await runtime.service.saveDraft({ sessionToken, ...body });
@@ -128,6 +138,10 @@ export function createStagingApiHandler(options = {}) {
         case "assignment.submit":
           requireMethod(req, "POST");
           result = await runtime.service.submitAssignment({ sessionToken, ...body });
+          break;
+        case "participant.evidence.record":
+          requireMethod(req, "POST");
+          result = await runtime.service.recordParticipantEvidence({ sessionToken, ...body });
           break;
         case "correction.request":
           requireMethod(req, "POST");

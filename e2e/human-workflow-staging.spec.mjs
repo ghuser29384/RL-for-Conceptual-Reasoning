@@ -22,15 +22,27 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   const csrf = operator.csrfToken;
   const headers = { "x-staging-csrf": csrf, "sec-fetch-site": "same-origin" };
 
-  const raterA = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater A", email: "browser-a@staging.metaphilosophy.invalid" } });
-  const raterB = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", displayName: "Synthetic browser rater B", email: "browser-b@staging.metaphilosophy.invalid" } });
-  const adjudicator = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "adjudicator", displayName: "Synthetic browser adjudicator", email: "browser-adjudicator@staging.metaphilosophy.invalid" } });
+  const raterA = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", purpose: "h11_human_usability", displayName: "H-11 participant A", email: "browser-a@example.test" } });
+  const raterB = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "rater", purpose: "h11_human_usability", displayName: "H-11 participant B", email: "browser-b@example.test" } });
+  const adjudicator = await api(operatorRequest, "identity.create", { method: "POST", headers, data: { role: "adjudicator", purpose: "synthetic_adjudication", displayName: "Synthetic browser adjudicator", email: "browser-adjudicator@staging.metaphilosophy.invalid" } });
 
-  const inviteA = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterA.identity.id, expiresInHours: 24 } });
-  const inviteB = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterB.identity.id, expiresInHours: 24 } });
-  const inviteAdjudicator = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: adjudicator.identity.id, expiresInHours: 24 } });
   const assignmentA = await api(operatorRequest, "assignment.create", { method: "POST", headers, data: { identityId: raterA.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
   const assignmentB = await api(operatorRequest, "assignment.create", { method: "POST", headers, data: { identityId: raterB.identity.id, positionId: bootstrap.positionId, kind: "initial" } });
+
+  const blockedInvite = await operatorRequest.post("/api/staging?action=invite.create", {
+    headers,
+    data: { identityId: raterA.identity.id, expiresInHours: 2 },
+  });
+  expect(blockedInvite.status()).toBe(409);
+  expect((await blockedInvite.json()).error.code).toBe("h11_access_gate_required");
+
+  const gateA = await api(operatorRequest, "h11.access.gate.record", { method: "POST", headers, data: { identityId: raterA.identity.id, assignmentId: assignmentA.assignment.id, payload: makeH11AccessGatePayload("A") } });
+  const gateB = await api(operatorRequest, "h11.access.gate.record", { method: "POST", headers, data: { identityId: raterB.identity.id, assignmentId: assignmentB.assignment.id, payload: makeH11AccessGatePayload("B") } });
+  const inviteA = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterA.identity.id, expiresInHours: 2 } });
+  const inviteB = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: raterB.identity.id, expiresInHours: 2 } });
+  const inviteAdjudicator = await api(operatorRequest, "invite.create", { method: "POST", headers, data: { identityId: adjudicator.identity.id, expiresInHours: 24 } });
+  expect(inviteA.invite.h11AccessGateId).toBe(gateA.record.id);
+  expect(inviteB.invite.h11AccessGateId).toBe(gateB.record.id);
 
   setup = {
     operator: { csrf, headers },
@@ -49,8 +61,9 @@ test("complete synthetic human workflow preserves initial ratings across correct
   const pageA = await contextA.newPage();
   await redeemInBrowser(pageA, setup.raterA.inviteToken);
   await expect(pageA.getByRole("heading", { name: "Rate contextualized critiques" })).toBeVisible();
+  await completeSyntheticConsent(pageA);
   await expect(pageA.locator(".critique-card")).toHaveCount(4);
-  await expect(pageA.getByText("Synthetic browser rater B")).toHaveCount(0);
+  await expect(pageA.getByText("H-11 participant B")).toHaveCount(0);
   await expect(pageA.getByText("Source", { exact: true })).toHaveCount(0);
   const dimensionLegends = pageA.getByText("Seven LMCA dimensions", { exact: true });
   await expect(dimensionLegends).toHaveCount(4);
@@ -75,7 +88,8 @@ test("complete synthetic human workflow preserves initial ratings across correct
   const contextB = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const pageB = await contextB.newPage();
   await redeemInBrowser(pageB, setup.raterB.inviteToken);
-  await expect(pageB.getByText("Synthetic browser rater A")).toHaveCount(0);
+  await completeSyntheticConsent(pageB);
+  await expect(pageB.getByText("H-11 participant A")).toHaveCount(0);
   const overflow = await pageB.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
   for (let index = 0; index < 4; index += 1) {
@@ -128,12 +142,22 @@ test("complete synthetic human workflow preserves initial ratings across correct
   await expect(pageB.locator(".withdrawal-request-status")).toContainText("Withdrawal recorded; assignment locked");
   await expect(pageB.locator(".withdrawal-request-status")).toContainText("remain in the private audit trail");
 
+  await completeSyntheticDebrief(resumedPageA, { recoveryPath: "correction", deviceClass: "desktop" });
+  await completeSyntheticDebrief(pageB, { recoveryPath: "withdrawal", deviceClass: "narrow_mobile" });
+
   const operatorContext = await browser.newContext({ storageState: await operatorRequest.storageState() });
   const operatorPage = await operatorContext.newPage();
   await operatorPage.goto("/staging/");
   await expect(operatorPage.getByRole("heading", { name: "Staging operator workspace" })).toBeVisible();
-  await expect(operatorPage.locator('[data-queue="corrections"]')).toContainText("Synthetic browser rater A");
-  await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("Synthetic browser rater B");
+  await expect(operatorPage.locator('[data-queue="access-preflight"]')).toContainText("H-11 participant A");
+  await expect(operatorPage.locator('[data-queue="access-preflight"]')).toContainText("H-11 participant B");
+  await expect(operatorPage.locator('[data-queue="access-preflight"]')).toContainText("Access preflight ready");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("H-11 participant A");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("H-11 participant B");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Consent recorded");
+  await expect(operatorPage.locator('[data-queue="participant-evidence"]')).toContainText("Debrief recorded");
+  await expect(operatorPage.locator('[data-queue="corrections"]')).toContainText("H-11 participant A");
+  await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("H-11 participant B");
   await expect(operatorPage.locator('[data-queue="withdrawals"]')).toContainText("Accepted records remain retained");
 
   const adjudicatorContext = await browser.newContext();
@@ -147,7 +171,7 @@ test("complete synthetic human workflow preserves initial ratings across correct
   await submitLatestAdjudicationReview(adjudicatorPage, "confirm_initials", "Independent review finds the initial disagreement adequately represented; this case should close resolved without requesting or accepting a re-rating.");
   await closeLatestCase(operatorPage, "Close resolved", "Resolved without re-rating after independent review; retain all eight immutable initial ratings.");
 
-  const openCorrection = operatorPage.locator('[data-queue="corrections"] .queue-item').filter({ hasText: "Synthetic browser rater A" });
+  const openCorrection = operatorPage.locator('[data-queue="corrections"] .queue-item').filter({ hasText: "H-11 participant A" });
   await openCorrection.locator('textarea[name="correctionNotes"]').fill("Approved because the rater identified a concrete object-level interpretation issue; create a predecessor-linked re-rating and preserve the original.");
   await openCorrection.getByRole("button", { name: "Approve predecessor-linked re-rating" }).click();
   await expect(operatorPage.locator('[data-queue="corrections"]')).toContainText("Operator response: approve_rerating");
@@ -183,6 +207,14 @@ test("complete synthetic human workflow preserves initial ratings across correct
   expect(privateExport.state.assignments.filter((assignment) => assignment.kind === "rerating")).toHaveLength(1);
   expect(privateExport.state.assignments.find((assignment) => assignment.kind === "rerating").predecessorAssignmentId).toBe(setup.raterA.assignmentId);
   expect(privateExport.state.assignments.find((assignment) => assignment.id === setup.raterB.assignmentId).status).toBe("withdrawn");
+  expect(privateExport.state.h11AccessGates).toHaveLength(2);
+  expect(JSON.stringify(privateExport)).not.toContain("browser-a@example.test");
+  expect(JSON.stringify(privateExport)).not.toContain("browser-b@example.test");
+  expect(privateExport.state.identities.filter((identity) => identity.purpose === "h11_human_usability").every((identity) => identity.email === null && identity.contactRouteValidated === true && identity.directContactPersisted === false)).toBe(true);
+  expect(privateExport.state.h11AccessGates.every((record) => record.version === "H11-ACCESS-GATE-2026-08-07-V2")).toBe(true);
+  expect(privateExport.state.participantEvidence).toHaveLength(4);
+  expect(privateExport.state.participantEvidence.filter((record) => record.kind === "consent")).toHaveLength(2);
+  expect(privateExport.state.participantEvidence.filter((record) => record.kind === "debrief")).toHaveLength(2);
 
   const snapshots = privateExport.state.labelSnapshots;
   expect(snapshots).toHaveLength(3);
@@ -193,6 +225,9 @@ test("complete synthetic human workflow preserves initial ratings across correct
 
   const publicExport = await api(operatorRequest, "export.public");
   expect(JSON.stringify(publicExport)).not.toContain("@staging.metaphilosophy.invalid");
+  expect(JSON.stringify(publicExport)).not.toContain("browser-a@example.test");
+  expect(JSON.stringify(publicExport)).not.toContain("H11-E2E-OWNER-AUTHORIZATION");
+  expect(JSON.stringify(publicExport)).not.toContain("Centrality measures how much the attacked claim matters");
   expect(publicExport.counts.ratings).toBe(12);
   expect(publicExport.snapshots).toHaveLength(3);
 
@@ -201,6 +236,105 @@ test("complete synthetic human workflow preserves initial ratings across correct
   await adjudicatorContext.close();
   await operatorContext.close();
 });
+
+
+
+function makeH11AccessGatePayload(recipientSlot) {
+  const now = Date.now();
+  return {
+    recipientSlot,
+    screening: {
+      identityConfirmed: true,
+      professionalRouteConfirmed: true,
+      exactSyntheticItemExposure: "no",
+      stagingInterfaceExposure: "no",
+      conflictStatus: "none_declared",
+      conflictNotes: "Synthetic rendered-browser rehearsal only.",
+      countryOfTaxResidence: "United States",
+      countryOfWorkForSession: "United States",
+      sanctionsScreening: "pass",
+      honorariumEligibility: "pass",
+      preferredPaymentRail: "wise",
+      accessibilityOrDeviceNeeds: "No additional needs in the synthetic browser rehearsal.",
+      operatorCoverageAvailable: true,
+      screeningOutcome: "pass",
+    },
+    finalConsent: {
+      scopeAndDataTermsRead: true,
+      syntheticScoresExcluded: true,
+      auditTrailAndNotesConsented: true,
+      voluntaryAndMayStop: true,
+      confirmationReference: `H11-E2E-CONSENT-${recipientSlot}-0001`,
+    },
+    session: {
+      startAt: new Date(now - 5 * 60 * 1000).toISOString(),
+      endAt: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
+      timeZone: "UTC",
+      supportRouteConfirmed: true,
+    },
+    externalPreflight: {
+      releaseSha: "b".repeat(40),
+      deploymentId: `dpl_h11browserdeployment${recipientSlot}000001`,
+      schemaVersion: 4,
+      syntheticOnlyPurposeConfirmed: true,
+      researchRatingsAuthorizedFalseConfirmed: true,
+      noOpenP0P1Defect: true,
+      shareLinkCreatedAt: new Date(now - 5 * 60 * 1000).toISOString(),
+      shareLinkCreatedWithin23Hours: true,
+      signedOutIncognitoJourneyPassed: true,
+      noOperatorOrCrossIdentityExposure: true,
+      controlIdentityJourneyPassed: true,
+      shareLinkExpiresAt: new Date(now + 4 * 60 * 60 * 1000).toISOString(),
+    },
+    ownerAuthorizationReference: `H11-E2E-OWNER-AUTHORIZATION-${recipientSlot}-0001`,
+    notes: "Synthetic rendered-browser evidence only; no human participant or research rating.",
+  };
+}
+
+async function completeSyntheticConsent(page) {
+  const form = page.locator(".participant-consent-form").first();
+  await expect(form).toBeVisible();
+  for (const name of [
+    "scopeAndDataTermsRead",
+    "syntheticScoresExcluded",
+    "auditTrailAndNotesConsented",
+    "voluntaryAndMayStop",
+  ]) {
+    await form.locator(`input[name="${name}"]`).check();
+  }
+  await form.getByRole("button", { name: "Record consent and open synthetic assignment" }).click();
+  await expect(page.getByText("Consent recorded", { exact: true })).toBeVisible();
+}
+
+async function completeSyntheticDebrief(page, { recoveryPath, deviceClass }) {
+  const form = page.locator(".participant-debrief-form").first();
+  await expect(form).toBeVisible();
+  await form.locator('textarea[name="centralityDefinition"]').fill("Centrality measures how much the attacked claim matters to the position as it is actually stated.");
+  await form.locator('textarea[name="strengthDefinition"]').fill("Strength measures how successfully the critique undermines the particular claims that it attacks.");
+  await form.locator('textarea[name="productImportance"]').fill("The product tracks substantive impact even when score mass can reasonably move between strength and centrality.");
+  await form.locator('textarea[name="lowClarityTreatment"]').fill("When clarity is below 0.5, the component ratings become less dependable and clarity plus overall deserve special weight.");
+  await form.locator('textarea[name="immutableInitialsReason"]').fill("Initial ratings remain immutable so later reconsideration cannot erase the original independent distribution.");
+  for (const [name, value] of [
+    ["workflowClarity", "5"],
+    ["autosaveConfidence", "5"],
+    ["resumeConfidence", "5"],
+    ["lockedStateClarity", "5"],
+    ["recoveryPathClarity", "4"],
+    ["researchBoundaryClarity", "5"],
+  ]) {
+    await form.locator(`select[name="${name}"]`).selectOption(value);
+  }
+  await form.locator('select[name="deviceClass"]').selectOption(deviceClass);
+  await form.locator('select[name="browserFamily"]').selectOption("chrome");
+  await form.locator('select[name="recoveryPath"]').selectOption(recoveryPath);
+  await form.locator('input[name="sessionDurationMinutes"]').fill("72");
+  await form.locator('select[name="sawUnexpectedMetadata"]').selectOption("no");
+  await form.locator('select[name="sawNonSyntheticMaterial"]').selectOption("no");
+  await form.locator('textarea[name="mostConfusing"]').fill("The distinction between correctness and strength required the most careful attention.");
+  await form.locator('textarea[name="improvementSuggestion"]').fill("Keep a compact rubric summary visible while the participant writes the object-level rationale.");
+  await form.getByRole("button", { name: "Submit synthetic-session debrief" }).click();
+  await expect(page.getByText("Debrief recorded", { exact: true })).toBeVisible();
+}
 
 async function redeemInBrowser(page, token) {
   await page.goto(`/staging/?invite=${encodeURIComponent(token)}`);

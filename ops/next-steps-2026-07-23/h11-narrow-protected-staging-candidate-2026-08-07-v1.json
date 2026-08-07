@@ -1,0 +1,31 @@
+{
+  "candidate_id": "H11-NARROW-PROTECTED-STAGING-CANDIDATE-2026-08-07-V1",
+  "status": "assembled_pending_exact_validation",
+  "base_release_commit": "202135a21fb15f5a12698e6a78e8c8d8b7fa79ef",
+  "validated_source_snapshot": "aec2004789be192f2fb08e98f365faa371f20ba7",
+  "target_branch": "candidate/h11-protected-staging-20260807",
+  "deployment_authorized": false,
+  "protected_release_branch_advanced": false,
+  "participant_access_authorized": false,
+  "participant_access_issued": false,
+  "research_ratings_authorized": false,
+  "real_research_rating_collected": false,
+  "outbound_participant_message_sent": false,
+  "payment_committed_or_made": false,
+  "scope": [
+    "integrated H-11 synthetic-session consent and debrief",
+    "fail-closed H-11 access issuance",
+    "V2 exact-release and session binding",
+    "direct-identifier minimization",
+    "focused contract and rendered-browser evidence"
+  ],
+  "excluded": [
+    "public editorial changes",
+    "argument-library changes",
+    "reviewer recruitment changes",
+    "production changes",
+    "funding changes",
+    "participant outreach or access issuance",
+    "research-use authorization"
+  ]
+}
