@@ -90,6 +90,11 @@ jobs:
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
 
+      - name: Keep workflow changes outside the GitHub Actions push token
+        run: |
+          git checkout -- .github/workflows/metaphilosophy-human-workflow-staging.yml
+          rm -rf .github/__pycache__
+
       - name: Check diff and syntax
         run: |
           git diff --check
@@ -151,6 +156,7 @@ jobs:
         run: |
           test ! -e .github/apply_h11_access_gate_v1.py
           test ! -e .github/workflows/apply-h11-access-gate-v1.yml
+          test ! -e .github/__pycache__
           git config user.name "ghuser29384"
           git config user.email "262476329+ghuser29384@users.noreply.github.com"
           git add api/staging.mjs \
@@ -161,8 +167,8 @@ jobs:
             scripts/verify-human-workflow-staging.mjs \
             test/h11-access-gate-contract.test.mjs \
             e2e/human-workflow-staging.spec.mjs \
-            .github/workflows/metaphilosophy-human-workflow-staging.yml \
             ops/next-steps-2026-07-23/h11-fail-closed-access-issuance-gate-2026-08-07.md \
-            .github
+            .github/apply_h11_access_gate_v1.py \
+            .github/workflows/apply-h11-access-gate-v1.yml
           git commit -m "Enforce the H-11 access issuance gate"
           git push origin HEAD:agent/48-critique-pilot-20260730
