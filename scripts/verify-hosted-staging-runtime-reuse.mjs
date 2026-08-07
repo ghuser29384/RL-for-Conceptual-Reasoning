@@ -25,6 +25,7 @@ const ACCEPTED_BACKEND_BLOBS = Object.freeze({
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v3.sql": "58ddd8fb8d5fe1f25f584bdced873a54e5daa050",
   "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v4.sql": "4a0e0a02627c8b576d8b8f5bbb83c7162c2dd589",
 });
+const BACKEND_PATHS = Object.freeze(Object.keys(ACCEPTED_BACKEND_BLOBS));
 
 const isActualReleasePreview = process.env.VERCEL === "1"
   && process.env.VERCEL_ENV === "preview"
@@ -54,7 +55,8 @@ assert.equal(evidence?.supabase?.purpose, "synthetic_rehearsal_only");
 assert.equal(evidence?.supabase?.research_ratings_authorized, false);
 
 const observedBlobs = {};
-for (const [path, expectedBlob] of Object.entries(ACCEPTED_BACKEND_BLOBS)) {
+for (const path of BACKEND_PATHS) {
+  const expectedBlob = ACCEPTED_BACKEND_BLOBS[path];
   let observedBlob;
   try {
     observedBlob = execFileSync("git", ["hash-object", "--", path], { encoding: "utf8" }).trim();
@@ -106,7 +108,7 @@ console.log(JSON.stringify({
   mode: "accepted_backend_evidence_reused_for_unchanged_runtime",
   exactReleaseSha,
   acceptedReleaseSha,
-  backendPathsChecked: Object.keys(ACCEPTED_BACKEND_BLOBS).length,
+  backendPathsChecked: BACKEND_PATHS.length,
   observedBackendBlobs: observedBlobs,
   hostedEventCount: expectedCount,
   hostedHeadHash: expectedHead,
