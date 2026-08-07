@@ -28,6 +28,7 @@ on:
       - "test/hosted-staging-gateway-contract.test.mjs"
       - "test/vercel-cost-controls-backport.test.mjs"
       - "e2e/human-workflow-staging.spec.mjs"
+      - "e2e/participant-readiness.spec.mjs"
       - "e2e/staging.playwright.config.mjs"
       - "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v*.sql"
       - "ops/next-steps-2026-07-23/human-workflow-*.md"
@@ -60,6 +61,7 @@ on:
       - "test/hosted-staging-gateway-contract.test.mjs"
       - "test/vercel-cost-controls-backport.test.mjs"
       - "e2e/human-workflow-staging.spec.mjs"
+      - "e2e/participant-readiness.spec.mjs"
       - "e2e/staging.playwright.config.mjs"
       - "ops/next-steps-2026-07-23/metaphilosophy-staging-schema-v*.sql"
       - "package.json"
@@ -102,6 +104,7 @@ jobs:
           node --check src/server.mjs
           node --check staging/app.mjs
           node --check staging/operator-token-guard.mjs
+          node --check staging/participant-readiness.mjs
           node --check scripts/bootstrap-staging-rehearsal.mjs
           node --check scripts/smoke-staging-runtime.mjs
           node --check scripts/smoke-staging-postgres.mjs
@@ -113,6 +116,7 @@ jobs:
           node --check scripts/verify-vercel-oidc-staging-gateway.mjs
           node --check test/hosted-staging-gateway-contract.test.mjs
           node --check e2e/human-workflow-staging.spec.mjs
+          node --check e2e/participant-readiness.spec.mjs
           node --check e2e/staging.playwright.config.mjs
 
       - name: Verify staging contracts
@@ -139,6 +143,8 @@ jobs:
           test -f dist/staging/index.html
           test -f dist/staging/app.mjs
           test -f dist/staging/styles.css
+          test -f dist/staging/participant-readiness.mjs
+          test -f dist/staging/participant-readiness.css
 
       - name: Build explicit local controlled-staging release
         run: |
@@ -146,6 +152,8 @@ jobs:
           test -f dist/staging/index.html
           test -f dist/staging/app.mjs
           test -f dist/staging/styles.css
+          test -f dist/staging/participant-readiness.mjs
+          test -f dist/staging/participant-readiness.css
 
       - name: Run deterministic synthetic lifecycle rehearsal
         run: npm run smoke:server
