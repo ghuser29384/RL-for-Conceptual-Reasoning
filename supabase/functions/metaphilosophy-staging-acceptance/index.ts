@@ -53,6 +53,17 @@ Deno.serve(async (request) => {
         exactReleaseSha,
         claims,
       });
+    } else if (action === "restore.prefix.verify") {
+      data = await verifyRestorePrefix({
+        events: body?.events,
+        expectedEventCount: body?.expectedEventCount,
+        expectedHeadHash: body?.expectedHeadHash,
+        expectedBackupSha256: body?.expectedBackupSha256,
+        expectedRestoredPrefixCount: body?.expectedRestoredPrefixCount,
+        expectedRestoredPrefixHeadHash: body?.expectedRestoredPrefixHeadHash,
+        exactReleaseSha,
+        claims,
+      });
     } else if (action === "report.store") {
       data = await storeReport({
         exactReleaseSha,
@@ -148,6 +159,77 @@ async function restoreAndVerify({ events, expectedEventCount, expectedHeadHash, 
   };
 }
 
+
+async function verifyRestorePrefix({
+  events,
+  expectedEventCount,
+  expectedHeadHash,
+  expectedBackupSha256,
+  expectedRestoredPrefixCount,
+  expectedRestoredPrefixHeadHash,
+  exactReleaseSha,
+  claims,
+}) {
+  if (!Array.isArray(events) || events.length === 0 || events.length > MAX_RESTORE_EVENTS) {
+    throw acceptanceError(400, "invalid_restore_events", `Restore-prefix verification requires 1 to ${MAX_RESTORE_EVENTS} events.`);
+  }
+  const fullVerification = await verifyEventChain(events);
+  if (Number(expectedEventCount) !== events.length) {
+    throw acceptanceError(409, "restore_count_mismatch", "The supplied event count does not match the backup.");
+  }
+  if (String(expectedHeadHash) !== fullVerification.headHash) {
+    throw acceptanceError(409, "restore_head_mismatch", "The supplied chain head does not match the backup.");
+  }
+  const backupSha256 = await sha256Hex(canonicalStringify(events));
+  if (String(expectedBackupSha256) !== backupSha256) {
+    throw acceptanceError(409, "restore_backup_hash_mismatch", "The supplied backup digest does not match the backup.");
+  }
+
+  const existing = await loadRestoreEvents();
+  if (existing.length === 0) {
+    throw acceptanceError(409, "restore_prefix_missing", "No prior independently restored chain exists; use restore.verify instead.");
+  }
+  const existingVerification = await verifyEventChain(existing);
+  if (Number(expectedRestoredPrefixCount) !== existing.length) {
+    throw acceptanceError(409, "restore_prefix_count_mismatch", "The recorded restore-prefix count does not match the retained restore ledger.");
+  }
+  if (String(expectedRestoredPrefixHeadHash) !== existingVerification.headHash) {
+    throw acceptanceError(409, "restore_prefix_head_mismatch", "The recorded restore-prefix head does not match the retained restore ledger.");
+  }
+  if (events.length <= existing.length) {
+    throw acceptanceError(409, "restore_prefix_has_no_extension", "The current primary chain must be a strict append-only extension of the prior restore prefix.");
+  }
+  const currentPrefix = events.slice(0, existing.length);
+  if (canonicalStringify(currentPrefix) !== canonicalStringify(existing)) {
+    throw acceptanceError(409, "restore_prefix_differs", "The retained restore ledger is not an exact prefix of the current primary chain.");
+  }
+
+  const readback = await restoreReadback();
+  assertReadback(readback, existing.length, existingVerification.headHash);
+  const priorReport = await selectLatestPassingReportForRestorePrefix(existing.length, existingVerification.headHash);
+  if (!priorReport) {
+    throw acceptanceError(409, "restore_prefix_unanchored", "The retained restore prefix is not anchored to a prior passing exact-release report.");
+  }
+
+  return {
+    status: "pass",
+    exactReleaseSha,
+    restoredPrefixEventCount: existing.length,
+    restoredPrefixHeadHash: existingVerification.headHash,
+    fullEventCount: events.length,
+    fullHeadHash: fullVerification.headHash,
+    appendOnlySuffixEventCount: events.length - existing.length,
+    backupSha256,
+    databaseReadback: readback,
+    exactEventEquality: false,
+    exactPrefixEquality: true,
+    applicationHashVerification: true,
+    priorRestoreAnchorReport: publicReport(priorReport),
+    caller: publicClaims(claims),
+    researchRatingsAuthorized: false,
+  };
+}
+
 async function storeReport({ exactReleaseSha, reportKind, statusValue, report, events, backupSha256, headHash, eventCount, claims }) {
   const kind = String(reportKind ?? "").trim();
   if (!/^[a-z0-9._:-]{5,120}$/u.test(kind)) throw acceptanceError(400, "invalid_report_kind", "Invalid report kind.");
@@ -215,6 +297,21 @@ async function selectLatestReport(exactReleaseSha: string, reportKind: string | 
   if (reportKind) query = query.eq("report_kind", reportKind);
   const { data, error } = await query;
   if (error) throw new Error(`report read failed: ${error.message}`);
+  return data?.[0] ?? null;
+}
+
+
+async function selectLatestPassingReportForRestorePrefix(eventCount: number, chainHeadHash: string) {
+  const { data, error } = await admin
+    .from("metaphilosophy_staging_verification_reports")
+    .select("id,report_kind,exact_release_sha,status,backup_sha256,chain_head_hash,event_count,research_ratings_authorized,created_at,report")
+    .eq("status", "pass")
+    .eq("event_count", eventCount)
+    .eq("chain_head_hash", chainHeadHash)
+    .eq("research_ratings_authorized", false)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`restore-prefix anchor read failed: ${error.message}`);
   return data?.[0] ?? null;
 }
 

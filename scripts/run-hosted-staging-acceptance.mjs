@@ -7,7 +7,7 @@ import { StagingWorkflowService } from "../src/staging-service.mjs";
 const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
 const LEDGER_URL = "https://zpnbshgrscbfelpychhn.supabase.co/functions/v1/metaphilosophy-staging-ledger";
 const ACCEPTANCE_URL = "https://zpnbshgrscbfelpychhn.supabase.co/functions/v1/metaphilosophy-staging-acceptance";
-const REPORT_KIND = "protected-hosted-synthetic-lifecycle-v2";
+const REPORT_KIND = "protected-hosted-synthetic-lifecycle-v3";
 
 const isActualReleasePreview = process.env.VERCEL === "1"
   && process.env.VERCEL_ENV === "preview"
@@ -34,6 +34,7 @@ assert.equal(initialStatus.metadata?.purpose, "synthetic_rehearsal_only");
 assert.equal(initialStatus.metadata?.research_ratings_authorized, false);
 assert.equal(initialStatus.researchRatingsAuthorized, false);
 const startingPrimary = structuredClone(initialStatus.primary);
+const startingRestore = structuredClone(initialStatus.restore);
 
 if (
   initialStatus.latestReport?.reportKind === REPORT_KIND
@@ -49,13 +50,6 @@ if (
   }, null, 2));
   process.exit(0);
 }
-
-if (initialStatus.restore.eventCount !== 0) {
-  throw new Error(
-    `Hosted staging acceptance requires an empty restore ledger when no exact-release report exists; found ${initialStatus.restore.eventCount}.`,
-  );
-}
-
 const makeStore = () => new RemoteEventStore({
   gatewayUrl: LEDGER_URL,
   oidcToken,
@@ -383,17 +377,38 @@ assert.equal(finalChain.events, finalEvents.length);
 assert.equal(finalChain.headHash, finalEvents.at(-1).eventHash);
 const backupSha256 = createHash("sha256").update(canonicalStringify(finalEvents)).digest("hex");
 
-const restoreEvidence = await acceptanceRequest("restore.verify", {
-  events: finalEvents,
-  expectedEventCount: finalEvents.length,
-  expectedHeadHash: finalChain.headHash,
-  expectedBackupSha256: backupSha256,
-});
-assert.equal(restoreEvidence.status, "pass");
-assert.equal(restoreEvidence.exactEventEquality, true);
-assert.equal(restoreEvidence.databaseReadback.eventCount, finalEvents.length);
-assert.equal(restoreEvidence.databaseReadback.headHash, finalChain.headHash);
-timeline.push("independent_append_only_restore_ledger_and_exact_chain_equality_passed");
+let restoreEvidence;
+if (startingRestore.eventCount === 0) {
+  restoreEvidence = await acceptanceRequest("restore.verify", {
+    events: finalEvents,
+    expectedEventCount: finalEvents.length,
+    expectedHeadHash: finalChain.headHash,
+    expectedBackupSha256: backupSha256,
+  });
+  assert.equal(restoreEvidence.status, "pass");
+  assert.equal(restoreEvidence.exactEventEquality, true);
+  assert.equal(restoreEvidence.databaseReadback.eventCount, finalEvents.length);
+  assert.equal(restoreEvidence.databaseReadback.headHash, finalChain.headHash);
+  timeline.push("independent_append_only_restore_ledger_and_exact_chain_equality_passed");
+} else {
+  restoreEvidence = await acceptanceRequest("restore.prefix.verify", {
+    events: finalEvents,
+    expectedEventCount: finalEvents.length,
+    expectedHeadHash: finalChain.headHash,
+    expectedBackupSha256: backupSha256,
+    expectedRestoredPrefixCount: startingRestore.eventCount,
+    expectedRestoredPrefixHeadHash: startingRestore.headHash,
+  });
+  assert.equal(restoreEvidence.status, "pass");
+  assert.equal(restoreEvidence.exactPrefixEquality, true);
+  assert.equal(restoreEvidence.databaseReadback.eventCount, startingRestore.eventCount);
+  assert.equal(restoreEvidence.databaseReadback.headHash, startingRestore.headHash);
+  assert.equal(restoreEvidence.fullEventCount, finalEvents.length);
+  assert.equal(restoreEvidence.fullHeadHash, finalChain.headHash);
+  assert.equal(restoreEvidence.appendOnlySuffixEventCount, finalEvents.length - startingRestore.eventCount);
+  assert.ok(restoreEvidence.appendOnlySuffixEventCount > 0);
+  timeline.push("previous_independent_restore_prefix_and_current_append_only_extension_verified");
+}
 
 const secondRestartStore = makeStore();
 const secondRestartService = new StagingWorkflowService({ store: secondRestartStore, now });
@@ -454,10 +469,14 @@ const report = {
     preservedPriorEvents: startingPrimary.eventCount,
     appendedRunEvents: finalEvents.length - startingPrimary.eventCount,
     restoredEvents: restoreEvidence.databaseReadback.eventCount,
+    restoredPrefixEvents: restoreEvidence.restoredPrefixEventCount ?? restoreEvidence.databaseReadback.eventCount,
+    currentUnrestoredAppendOnlySuffixEvents: restoreEvidence.appendOnlySuffixEventCount ?? 0,
   },
   chain: {
     primaryHeadHash: finalChain.headHash,
     restoredHeadHash: restoreEvidence.databaseReadback.headHash,
+    currentPrimaryHeadHash: finalChain.headHash,
+    restoreMode: restoreEvidence.exactEventEquality === true ? "full_exact_restore" : "previous_exact_restore_prefix_plus_verified_append_only_extension",
     canonicalBackupSha256: backupSha256,
     sequenceGapCount: restoreEvidence.databaseReadback.sequenceGapCount,
     previousHashMismatchCount: restoreEvidence.databaseReadback.previousHashMismatchCount,

@@ -72,6 +72,9 @@ test("Vercel refuses to publish the designated preview unless the OIDC preflight
   }
   assert.match(verifier, /schema_version, 4/u);
   assert.match(acceptance, /restore\.verify/u);
+  assert.match(acceptance, /restore\.prefix\.verify/u);
+  assert.match(acceptance, /previous_independent_restore_prefix_and_current_append_only_extension_verified/u);
+  assert.doesNotMatch(acceptance, /requires an empty restore ledger/u);
   assert.match(acceptance, /report\.store/u);
   assert.match(acceptance, /new_runtime_instance_readback_and_session_resume_passed/u);
   assert.match(acceptance, /second_runtime_restart_preserved_sessions_ratings_receipts_and_snapshot/u);
@@ -92,6 +95,10 @@ test("the acceptance gateway preserves exact-release, restore, and append-only e
   assert.match(gateway, /environment:preview/u);
   assert.match(gateway, /exactReleaseSha/u);
   assert.match(gateway, /restore\.verify/u);
+  assert.match(gateway, /restore\.prefix\.verify/u);
+  assert.match(gateway, /restore_prefix_unanchored/u);
+  assert.match(gateway, /exactPrefixEquality/u);
+  assert.match(gateway, /selectLatestPassingReportForRestorePrefix/u);
   assert.match(gateway, /report\.store/u);
   assert.match(gateway, /verifyEventChain/u);
   assert.match(gateway, /schema_version\) !== 4/u);
@@ -108,7 +115,23 @@ test("the acceptance gateway preserves exact-release, restore, and append-only e
   assert.match(migration, /revoke all.+from authenticated/isu);
 });
 
+
+test("restore prefix reuse remains anchored to an earlier exact restore and a strict append-only extension", () => {
+  const acceptance = files["scripts/run-hosted-staging-acceptance.mjs"];
+  const gateway = files["supabase/functions/metaphilosophy-staging-acceptance/index.ts"];
+  assert.match(acceptance, /startingRestore/u);
+  assert.match(acceptance, /expectedRestoredPrefixCount/u);
+  assert.match(acceptance, /expectedRestoredPrefixHeadHash/u);
+  assert.match(acceptance, /appendOnlySuffixEventCount > 0/u);
+  assert.match(gateway, /events\.slice\(0, existing\.length\)/u);
+  assert.match(gateway, /canonicalStringify\(currentPrefix\) !== canonicalStringify\(existing\)/u);
+  assert.match(gateway, /events\.length <= existing\.length/u);
+  assert.match(gateway, /priorRestoreAnchorReport/u);
+  assert.match(gateway, /researchRatingsAuthorized: false/u);
+});
+
 test("RemoteEventStore sends OIDC and rejects a missing synthetic-only boundary", async () => {
+
   const originalFetch = globalThis.fetch;
   const observed = [];
   globalThis.fetch = async (url, options) => {
