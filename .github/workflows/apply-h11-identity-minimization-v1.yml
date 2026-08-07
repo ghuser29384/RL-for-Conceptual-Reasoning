@@ -53,15 +53,20 @@ jobs:
 
           def robust_replace_once(path: str, old: str, new: str) -> None:
               text = module.read(path)
-              if old in text:
-                  module.write(path, text.replace(old, new, 1))
-                  return
-              for width in (2, 4, 6, 8):
-                  prefix = " " * width
-                  candidate = indent_nonblank(old, prefix)
-                  if candidate in text:
-                      module.write(path, text.replace(candidate, indent_nonblank(new, prefix), 1))
+              variants = [old]
+              without_legacy_maxlength = old.replace(' maxlength="160"', '')
+              if without_legacy_maxlength != old:
+                  variants.append(without_legacy_maxlength)
+              for variant in variants:
+                  if variant in text:
+                      module.write(path, text.replace(variant, new, 1))
                       return
+                  for width in (2, 4, 6, 8):
+                      prefix = " " * width
+                      candidate = indent_nonblank(variant, prefix)
+                      if candidate in text:
+                          module.write(path, text.replace(candidate, indent_nonblank(new, prefix), 1))
+                          return
               raise RuntimeError(f"{path}: anchor not found: {old[:180]!r}")
 
           module.replace_once = robust_replace_once
