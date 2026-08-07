@@ -100,7 +100,7 @@ jobs:
           git diff --check
           node --check scripts/run-hosted-staging-acceptance.mjs
           node --check test/hosted-staging-gateway-contract.test.mjs
-          deno check supabase/functions/metaphilosophy-staging-acceptance/index.ts
+          deno check --node-modules-dir=auto supabase/functions/metaphilosophy-staging-acceptance/index.ts
 
       - name: Run focused hosted acceptance contracts
         run: node --test test/hosted-staging-gateway-contract.test.mjs test/h11-access-gate-contract.test.mjs test/h11-narrow-candidate-contract.test.mjs
