@@ -66,6 +66,31 @@ jobs:
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
 
+      - name: Make the keyboard skip link visible immediately on focus
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("staging/participant-readiness.css")
+          text = path.read_text(encoding="utf-8")
+          old = '''  transition: top 120ms ease;
+          }
+
+          .skip-link:focus {
+            top: 12px;
+          }'''
+          new = '''  transition: none;
+          }
+
+          .skip-link:focus,
+          .skip-link:focus-visible {
+            top: 12px;
+          }'''
+          if text.count(old) != 1:
+              raise SystemExit("skip-link accessibility anchor did not match exactly")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Check diff and syntax
         run: |
           git diff --check
