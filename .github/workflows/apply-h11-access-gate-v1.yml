@@ -68,6 +68,28 @@ jobs:
           module.main()
           PY
 
+      - name: Make access-gate supersession append-order deterministic
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/staging-service.mjs")
+          text = path.read_text(encoding="utf-8")
+          old = '''function latestH11AccessGate(state, identityId, assignmentId) {
+            return state.h11AccessGates
+              .filter((record) => record.identityId === identityId && record.assignmentId === assignmentId)
+              .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0] ?? null;
+          }'''
+          new = '''function latestH11AccessGate(state, identityId, assignmentId) {
+            const candidates = state.h11AccessGates
+              .filter((record) => record.identityId === identityId && record.assignmentId === assignmentId);
+            return candidates.at(-1) ?? null;
+          }'''
+          if text.count(old) != 1:
+              raise SystemExit("latest H-11 access-gate helper anchor did not match exactly")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Check diff and syntax
         run: |
           git diff --check
