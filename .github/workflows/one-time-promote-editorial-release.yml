@@ -1,0 +1,103 @@
+name: One-time promote audited Metaphilosophy editorial release
+
+on:
+  push:
+    branches:
+      - ops/restore-production-hold-20260807
+    paths:
+      - ".github/workflows/one-time-promote-editorial-release.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-time-metaphilosophy-editorial-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote exact staged production deployment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_DEPLOYMENT_ID: dpl_EQQHRrqyqNcYmN9sYUyATMof4PQ6
+      TARGET_DEPLOYMENT_URL: rlhf-conceptual-reasoning-nfgg6cjkk-ellen-s.vercel.app
+      EXPECTED_GIT_SHA: 04e09576aae032aac408f343cf9f09d6bad8d6f5
+      EXPECTED_RELEASE_MARKER: mp-public-voice-20260806-r1
+      VERCEL_SCOPE: ellen-s
+      VERCEL_TOKEN_PRIMARY: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_TOKEN_ALTERNATE: ${{ secrets.VERCEL_ACCESS_TOKEN }}
+      VERCEL_TOKEN_API: ${{ secrets.VERCEL_API_TOKEN }}
+
+    steps:
+      - name: Select an available Vercel API token without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="${VERCEL_TOKEN_PRIMARY:-}"
+          if [[ -z "$token" ]]; then token="${VERCEL_TOKEN_ALTERNATE:-}"; fi
+          if [[ -z "$token" ]]; then token="${VERCEL_TOKEN_API:-}"; fi
+          if [[ -z "$token" ]]; then
+            echo "::error::No Vercel API token is available in the repository secrets. Promotion remains fail-closed."
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          printf 'VERCEL_PROMOTION_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
+      - name: Confirm the exact staged deployment before promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_PROMOTION_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$TARGET_DEPLOYMENT_ID?teamId=team_ySu6sF3Uho1E1GnJtCQPVEuJ")"
+          RESPONSE="$response" node <<'NODE'
+          const deployment = JSON.parse(process.env.RESPONSE);
+          const expectedId = process.env.TARGET_DEPLOYMENT_ID;
+          const expectedSha = process.env.EXPECTED_GIT_SHA;
+          if (deployment.id !== expectedId) throw new Error(`Wrong deployment: ${deployment.id}`);
+          if (deployment.readyState !== "READY") throw new Error(`Deployment is not READY: ${deployment.readyState}`);
+          if (deployment.target !== "production") throw new Error(`Deployment target is not production: ${deployment.target}`);
+          if (deployment.meta?.githubCommitSha !== expectedSha) {
+            throw new Error(`Wrong Git SHA: ${deployment.meta?.githubCommitSha}`);
+          }
+          console.log(`Verified staged deployment ${deployment.id} at ${expectedSha}.`);
+          NODE
+
+      - name: Promote the exact staged deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes vercel@58.1.0 promote "https://$TARGET_DEPLOYMENT_URL" \
+            --yes \
+            --timeout 5m \
+            --scope "$VERCEL_SCOPE" \
+            --token "$VERCEL_PROMOTION_TOKEN"
+
+      - name: Verify the canonical release marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            page="$(curl --fail --silent --show-error --max-time 20 https://www.metaphilosophy.org/)" || true
+            if grep -Fq "$EXPECTED_RELEASE_MARKER" <<<"$page"; then
+              echo "Canonical domain serves $EXPECTED_RELEASE_MARKER."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::The promotion command completed, but the canonical release marker was not observed."
+          exit 1
+
+      - name: Record the bounded promotion
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "### Exact Metaphilosophy editorial promotion"
+            echo
+            echo "- Deployment: \`$TARGET_DEPLOYMENT_ID\`"
+            echo "- Source commit: \`$EXPECTED_GIT_SHA\`"
+            echo "- Canonical marker: \`$EXPECTED_RELEASE_MARKER\`"
+            echo "- Promotion only; no rebuild, content change, participant action, or research-rating authorization."
+          } >> "$GITHUB_STEP_SUMMARY"
