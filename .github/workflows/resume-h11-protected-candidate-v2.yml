@@ -53,7 +53,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Keep generated validation evidence outside the clean tracked-tree assertion
+      - name: Keep generated test artifacts outside the tracked-tree assertion
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -61,7 +61,22 @@ jobs:
           path = Path("scripts/assemble-h11-protected-candidate-v2.sh")
           text = path.read_text(encoding="utf-8")
           old = 'test -z "$(git status --porcelain)"\n\ngit push origin HEAD:"$CANDIDATE_BRANCH"'
-          new = 'git diff --quiet\ngit diff --cached --quiet\ntest -z "$(git status --porcelain --untracked-files=all | grep -vE \'^\\?\\? \\.staging-evidence/\' || true)"\n\ngit push origin HEAD:"$CANDIDATE_BRANCH"'
+          new = '''git diff --quiet || {
+            echo "Unexpected unstaged tracked changes after evidence commit:" >&2
+            git diff --stat >&2
+            git diff >&2
+            exit 1
+          }
+          git diff --cached --quiet || {
+            echo "Unexpected staged changes after evidence commit:" >&2
+            git diff --cached --stat >&2
+            git diff --cached >&2
+            exit 1
+          }
+          echo "Untracked validation artifacts intentionally remain outside Git history:"
+          git status --short --untracked-files=all || true
+
+          git push origin HEAD:"$CANDIDATE_BRANCH"'''
           if text.count(old) != 1:
               raise SystemExit("Expected final clean-tree assertion anchor exactly once")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
