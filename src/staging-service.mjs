@@ -107,7 +107,9 @@ export class StagingWorkflowService {
     const actor = await this.requireRole(actorSessionToken, "operator");
     const state = await this.state();
     const identity = activeIdentity(state, identityId);
-    const gate = resolveInviteAccessGate(state, identity, this.now(), expiresInHours);
+    const now = this.now();
+    const gate = resolveInviteAccessGate(state, identity, now, expiresInHours);
+    assertNoActiveH11Invite(state, identity.id, gate.metadata.h11AccessGateId ?? null, now);
     const result = await this.createInviteInternal({
       identityId: identity.id,
       actorId: actor.identity.id,
@@ -181,14 +183,14 @@ export class StagingWorkflowService {
     if (invite.usedAt) throw serviceError(409, "used_invite", "The invitation has already been used. Ask the operator for a replacement.");
     if (new Date(invite.expiresAt) <= now) throw serviceError(401, "expired_invite", "The invitation has expired.");
     const identity = activeIdentity(state, invite.identityId);
-    validateInviteAccessGateAtRedemption(state, invite, identity, now);
+    const h11SessionExpiresAt = validateInviteAccessGateAtRedemption(state, invite, identity, now, this.sessionTtlHours);
     const sessionToken = makeToken();
     const session = {
       id: randomUUID(),
       identityId: identity.id,
       tokenHash: sha256Token(sessionToken),
       createdAt: now.toISOString(),
-      expiresAt: addHours(now, this.sessionTtlHours).toISOString(),
+      expiresAt: h11SessionExpiresAt ?? addHours(now, this.sessionTtlHours).toISOString(),
       revokedAt: null,
       userAgentHash: userAgent ? createHash("sha256").update(String(userAgent)).digest("hex") : null,
     };
@@ -869,6 +871,9 @@ function normalizeIdentityPurpose({ role, purpose, email }) {
   if (["synthetic_automation", "synthetic_adjudication"].includes(value) && !isSyntheticEmail(email)) {
     throw serviceError(400, "synthetic_identity_email_required", "Synthetic automation identities must use a non-deliverable .invalid email address.");
   }
+  if (value === "h11_human_usability" && isSyntheticEmail(email)) {
+    throw serviceError(400, "human_identity_deliverable_email_required", "Qualified human H-11 identities may not use a synthetic .invalid email address.");
+  }
   return value;
 }
 
@@ -999,8 +1004,44 @@ function latestH11AccessGate(state, identityId, assignmentId) {
   return candidates.at(-1) ?? null;
 }
 
+function validateRaterIdentityPurpose(identity, errorStatus) {
+  const purpose = effectiveIdentityPurpose(identity);
+  if (identity.role !== "rater") return purpose;
+  if (purpose === "synthetic_automation") {
+    if (!isSyntheticEmail(identity.email)) {
+      throw serviceError(errorStatus, "synthetic_identity_email_required", "Synthetic automation access requires a non-deliverable .invalid identity.");
+    }
+    return purpose;
+  }
+  if (purpose === "h11_human_usability") {
+    if (isSyntheticEmail(identity.email)) {
+      throw serviceError(errorStatus, "human_identity_deliverable_email_required", "Qualified human H-11 access may not use a synthetic .invalid identity.");
+    }
+    return purpose;
+  }
+  throw serviceError(errorStatus, "identity_purpose_required", "Unclassified real-email rater access is blocked. Create or repair an explicitly H-11-classified identity before proceeding.");
+}
+
+function assertNoActiveH11Invite(state, identityId, h11AccessGateId, now) {
+  if (!h11AccessGateId) return;
+  const existing = state.invites.find((invite) => (
+    invite.identityId === identityId
+    && invite.h11AccessGateId === h11AccessGateId
+    && !invite.usedAt
+    && !invite.revokedAt
+    && new Date(invite.expiresAt) > now
+  ));
+  if (existing) {
+    throw serviceError(409, "h11_active_invite_exists", "An unused H-11 invitation already exists for this exact access gate. Revoke or replace it rather than issuing a second valid token.", {
+      inviteId: existing.id,
+      expiresAt: existing.expiresAt,
+    });
+  }
+}
+
 function resolveInviteAccessGate(state, identity, now, expiresInHours) {
-  if (effectiveIdentityPurpose(identity) !== "h11_human_usability") return { expiresAt: null, metadata: {} };
+  const purpose = validateRaterIdentityPurpose(identity, 409);
+  if (identity.role !== "rater" || purpose === "synthetic_automation") return { expiresAt: null, metadata: {} };
   const assignment = state.assignments
     .filter((candidate) => candidate.identityId === identity.id && candidate.kind === "initial" && candidate.status === "assigned")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
@@ -1028,10 +1069,18 @@ function resolveInviteAccessGate(state, identity, now, expiresInHours) {
   };
 }
 
-function validateInviteAccessGateAtRedemption(state, invite, identity, now) {
-  if (!invite.h11AccessGateId) return;
-  if (effectiveIdentityPurpose(identity) !== "h11_human_usability") {
-    throw serviceError(401, "h11_identity_mismatch", "The invitation access purpose no longer matches the identity.");
+function validateInviteAccessGateAtRedemption(state, invite, identity, now, sessionTtlHours) {
+  const purpose = validateRaterIdentityPurpose(identity, 401);
+  if (identity.role !== "rater") {
+    if (invite.h11AccessGateId) throw serviceError(401, "h11_identity_mismatch", "A non-rater identity cannot redeem an H-11 participant invitation.");
+    return null;
+  }
+  if (purpose === "synthetic_automation") {
+    if (invite.h11AccessGateId) throw serviceError(401, "h11_identity_mismatch", "A synthetic automation identity cannot redeem a human H-11 participant invitation.");
+    return null;
+  }
+  if (!invite.h11AccessGateId) {
+    throw serviceError(401, "h11_access_gate_required", "Qualified human H-11 access requires an invitation bound to the complete access gate.");
   }
   const assignment = state.assignments.find((candidate) => candidate.id === invite.assignmentId);
   if (!assignment || assignment.identityId !== identity.id || assignment.kind !== "initial") {
@@ -1047,8 +1096,16 @@ function validateInviteAccessGateAtRedemption(state, invite, identity, now) {
   const start = new Date(latest.payload.session.startAt);
   const end = new Date(latest.payload.session.endAt);
   const shareExpiry = new Date(latest.payload.externalPreflight.shareLinkExpiresAt);
+  const inviteExpiry = new Date(invite.expiresAt);
   if (now < start) throw serviceError(403, "h11_access_window_not_open", "The protected H-11 session window has not opened yet.");
-  if (now >= end || now >= shareExpiry) throw serviceError(401, "h11_access_window_closed", "The protected H-11 session or share-link window has closed.");
+  if (now >= end || now >= shareExpiry || now >= inviteExpiry) throw serviceError(401, "h11_access_window_closed", "The protected H-11 session, share-link, or invitation window has closed.");
+  const ordinarySessionExpiry = addHours(now, sessionTtlHours);
+  return new Date(Math.min(
+    ordinarySessionExpiry.getTime(),
+    end.getTime(),
+    shareExpiry.getTime(),
+    inviteExpiry.getTime(),
+  )).toISOString();
 }
 
 function normalizeRating(rating = {}) {

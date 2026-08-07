@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -64,6 +65,10 @@ test("H-11 access invitations fail closed until exact screening, consent, sessio
   });
   assert.equal(invite.invite.h11AccessGateId, first.record.id);
   assert.equal(invite.invite.assignmentId, assignment.assignment.id);
+  await assert.rejects(
+    () => harness.service.createInvite({ actorSessionToken: operator.sessionToken, identityId: participant.identity.id, expiresInHours: 2 }),
+    (error) => error.status === 409 && error.code === "h11_active_invite_exists",
+  );
 
   const supersedingPayload = makeAccessGate(harness.now(), {
     deploymentId: "dpl_h11supersedingdeployment000002",
@@ -89,6 +94,9 @@ test("H-11 access invitations fail closed until exact screening, consent, sessio
   });
   const session = await harness.service.redeemInvite({ token: replacement.token });
   assert.equal(session.identity.id, participant.identity.id);
+  assert.equal(session.session.expiresAt, replacement.invite.expiresAt);
+  assert.ok(new Date(session.session.expiresAt) <= new Date(superseding.record.payload.session.endAt));
+  assert.ok(new Date(session.session.expiresAt) <= new Date(superseding.record.payload.externalPreflight.shareLinkExpiresAt));
 
   const operatorWorkspace = await harness.service.getWorkspace(operator.sessionToken);
   assert.equal(operatorWorkspace.h11AccessGates.length, 2);
@@ -115,8 +123,63 @@ test("real-email raters require an explicit H-11 purpose while synthetic automat
     () => harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", purpose: "synthetic_automation", displayName: "Misclassified", email: "real-looking@example.test" }),
     (error) => error.status === 400 && error.code === "synthetic_identity_email_required",
   );
+  await assert.rejects(
+    () => harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", purpose: "h11_human_usability", displayName: "Fake human", email: "fake-human@example.invalid" }),
+    (error) => error.status === 400 && error.code === "human_identity_deliverable_email_required",
+  );
   const synthetic = await harness.service.createIdentity({ actorSessionToken: operator.sessionToken, role: "rater", displayName: "Synthetic", email: "synthetic@example.invalid" });
   assert.equal(synthetic.identity.purpose, "synthetic_automation");
+  const syntheticInvite = await harness.service.createInvite({ actorSessionToken: operator.sessionToken, identityId: synthetic.identity.id, expiresInHours: 24 });
+  const syntheticSession = await harness.service.redeemInvite({ token: syntheticInvite.token });
+  assert.equal(new Date(syntheticSession.session.expiresAt).getTime() - harness.now().getTime(), 12 * 60 * 60 * 1000);
+});
+
+test("legacy real-email rater invitations remain blocked even when they predate explicit identity purposes", async () => {
+  const harness = await makeHarness();
+  const bootstrap = await harness.service.bootstrap({ bootstrapToken: "h11-legacy-bootstrap", expectedBootstrapToken: "h11-legacy-bootstrap" });
+  const operator = await harness.service.redeemInvite({ token: bootstrap.inviteToken });
+  const legacyIdentityId = "11111111-1111-4111-8111-111111111111";
+  await harness.store.append({
+    type: "identity.created",
+    aggregateId: legacyIdentityId,
+    actorId: operator.identity.id,
+    payload: {
+      id: legacyIdentityId,
+      role: "rater",
+      displayName: "Legacy unclassified real-email rater",
+      email: "legacy-real-rater@example.test",
+      status: "active",
+    },
+    createdAt: harness.now().toISOString(),
+  });
+
+  await assert.rejects(
+    () => harness.service.createInvite({ actorSessionToken: operator.sessionToken, identityId: legacyIdentityId, expiresInHours: 2 }),
+    (error) => error.status === 409 && error.code === "identity_purpose_required",
+  );
+
+  const legacyToken = "legacy-real-rater-invite-token-before-purpose-migration";
+  const legacyInviteId = "22222222-2222-4222-8222-222222222222";
+  await harness.store.append({
+    type: "invite.created",
+    aggregateId: legacyInviteId,
+    actorId: operator.identity.id,
+    payload: {
+      id: legacyInviteId,
+      identityId: legacyIdentityId,
+      tokenHash: createHash("sha256").update(legacyToken).digest("hex"),
+      createdAt: harness.now().toISOString(),
+      expiresAt: new Date(harness.now().getTime() + 2 * 60 * 60 * 1000).toISOString(),
+      usedAt: null,
+      revokedAt: null,
+      replacementInviteId: null,
+    },
+    createdAt: harness.now().toISOString(),
+  });
+  await assert.rejects(
+    () => harness.service.redeemInvite({ token: legacyToken }),
+    (error) => error.status === 401 && error.code === "identity_purpose_required",
+  );
 });
 
 async function makeHarness() {
@@ -127,6 +190,7 @@ async function makeHarness() {
   await service.initialize();
   return {
     service,
+    store,
     now: () => new Date(current),
     advanceMinutes(minutes) { current = new Date(current.getTime() + minutes * 60 * 1000); },
   };

@@ -39,3 +39,14 @@ The gate stores only country-level jurisdiction fields, minimum-necessary notes,
 ## Non-authorization
 
 This implementation does not create a Vercel share URL, participant identity, assignment, invitation, payment obligation, calendar event, email, or research record. It does not move the protected release branch, deploy a successor, pass H-11, sign H-12, or authorize Pilot 01 ratings.
+
+## Post-implementation hardening
+
+A second code review found and closed four residual access-boundary defects before deployment:
+
+1. an H-11 authenticated session could otherwise inherit the ordinary 12-hour session lifetime and survive beyond the approved session or share-link window;
+2. a legacy real-email rater identity without an explicit purpose could otherwise be treated as an ordinary non-H-11 identity during invitation issuance or redemption;
+3. a `.invalid` synthetic identity could otherwise be mislabeled as a qualified human H-11 identity; and
+4. the same current H-11 access gate could otherwise have more than one simultaneously valid unused invitation.
+
+The service now bounds an H-11 session to the earliest of the ordinary session TTL, the approved session end, the protected share-link expiry, and the one-time invitation expiry. It rejects unclassified real-email rater access at both issuance and redemption, requires synthetic and human identity classes to use non-overlapping email classes, and permits only one unused invitation for the same current gate. A superseding gate still invalidates every invitation bound to the earlier gate.
