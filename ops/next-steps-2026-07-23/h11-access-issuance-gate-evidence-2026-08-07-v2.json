@@ -1,0 +1,195 @@
+{
+  "record_id": "H11-ACCESS-ISSUANCE-GATE-EVIDENCE-2026-08-07-V2",
+  "recorded_at": "2026-08-07T08:15:00Z",
+  "scope": "synthetic H-11 qualified-human usability access control only",
+  "status": "validated_successor_candidate_not_deployed",
+  "authorization": {
+    "research_ratings_authorized": false,
+    "participant_access_issued": false,
+    "participant_selected_for_research": false,
+    "research_work_assigned": false,
+    "real_research_rating_collected": false,
+    "payment_committed_or_made": false,
+    "production_deployed": false,
+    "protected_release_branch_advanced": false,
+    "pull_request_merged": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "funding_submitted": false
+  },
+  "accepted_hosted_release": {
+    "commit": "202135a21fb15f5a12698e6a78e8c8d8b7fa79ef",
+    "branch": "release/vercel-preview",
+    "deployment_id": "dpl_GmdeKXfv4LQJ6T5iGLnrRXipogHP",
+    "supabase_project": "zpnbshgrscbfelpychhn",
+    "schema_version": 4,
+    "purpose": "synthetic_rehearsal_only",
+    "research_ratings_authorized": false,
+    "unchanged_by_this_work": true
+  },
+  "successor_commits": {
+    "integrated_consent_and_debrief": "0feac5a5dd074c9eea92d66e351752179fdbc5a8",
+    "initial_fail_closed_access_gate": "2a47d853aebf86658e1645a3bab06a49a30608f4",
+    "lifetime_and_identity_classification_hardening": "cf5cf3e204c594ef6505f4962b1988d5b343d1c0",
+    "v2_exact_release_and_session_binding": "8f66896b431969b398545ab34cc87ad9ebd90118",
+    "direct_identifier_minimization": "aec2004789be192f2fb08e98f365faa371f20ba7",
+    "standard_ci_contract_gate": "d9d6ea230a76bae31ea0747dee1d023cb2777a97"
+  },
+  "validated_head": "d9d6ea230a76bae31ea0747dee1d023cb2777a97",
+  "access_control_contract": {
+    "version": "H11-ACCESS-GATE-2026-08-07-V2",
+    "identity_classes": {
+      "synthetic_automation": "non-deliverable .invalid address required",
+      "h11_human_usability": "constrained slot pseudonym required; deliverable contact route validated transiently; direct contact identifier discarded before append-only event formation",
+      "synthetic_adjudication": "non-deliverable .invalid address required",
+      "controlled_operator": "controlled operator identity"
+    },
+    "required_before_h11_invitation": [
+      "explicit H-11 human-usability identity classification",
+      "constrained non-identifying participant alias",
+      "transient validation of a deliverable professional contact route without persisting the contact address",
+      "exact initial synthetic assignment and packet hash",
+      "identity confirmation and professional-route confirmation",
+      "exact-item and staging-interface exposure screening",
+      "conflict and institutional-restriction clearance",
+      "country of tax residence and country of work for the session",
+      "sanctions-screening pass",
+      "honorarium-eligibility pass",
+      "preferred payment rail",
+      "accessibility and device needs",
+      "live operator coverage",
+      "all four approved final-consent confirmations",
+      "private consent-confirmation reference",
+      "exact staffed session start, end, and time zone",
+      "private support-route confirmation",
+      "exact release SHA and Vercel deployment ID",
+      "schema version 4",
+      "synthetic_rehearsal_only purpose",
+      "research_ratings_authorized=false",
+      "no open P0 or P1 defect or integrity incident",
+      "structured share-link creation and expiry times",
+      "share link created no more than 23 hours before the gate record",
+      "normal signed-out or incognito external-browser journey",
+      "no operator-session, other-identity, assignment, or reusable-token exposure",
+      "separate synthetic control-identity journey",
+      "separate owner access-authorization reference"
+    ],
+    "fail_closed_properties": [
+      "invitation issuance is rejected when the gate is absent, incomplete, failed, paused, stale, mismatched, or recorded under an obsolete contract version",
+      "hosted gate recording rejects a release SHA that differs from VERCEL_GIT_COMMIT_SHA",
+      "application invitation cannot outlive the approved session or protected share-link window",
+      "only one unused invitation may exist for the same current H-11 gate",
+      "a new invitation cannot be issued while an authenticated H-11 session is active",
+      "replacement issuance excludes only the invitation being replaced and still detects every other valid token",
+      "redemption is rejected before the session opens and after the session, share-link, or invitation window closes",
+      "redemption and every subsequent authenticated request revalidate the current gate, assignment, packet hash, identity minimization state, and contract version",
+      "session expiry is the earliest of the ordinary session TTL, approved session end, protected share-link expiry, and invitation expiry",
+      "recording a superseding gate revokes any active participant session and invalidates invitations bound to the earlier gate",
+      "legacy unclassified real-email rater identities are blocked at issuance and redemption",
+      "synthetic and human identity classes use non-overlapping email rules",
+      "public-safe exports omit identities, sessions, access gates, participant evidence, and free text"
+    ],
+    "direct_identifier_minimization": {
+      "persisted_h11_identity_fields": [
+        "opaque identity ID",
+        "constrained participant slot alias",
+        "role",
+        "H-11 purpose",
+        "contactRouteValidated=true",
+        "directContactPersisted=false",
+        "status"
+      ],
+      "prohibited_from_application_ledger": [
+        "participant personal name",
+        "participant contact email",
+        "tax identifier",
+        "banking credential",
+        "identity document",
+        "full address",
+        "plaintext protected share URL",
+        "plaintext application invitation token"
+      ],
+      "tested_private_event_and_export_behavior": "submitted H-11 contact emails are absent from raw append-only events and private exports"
+    }
+  },
+  "defects_found_and_closed": [
+    "operator could previously issue a rater invitation before recipient-specific screening, final consent, exact session, external-browser preflight, and separate owner authorization were represented in the product",
+    "access-gate supersession originally used timestamp sorting that was ambiguous when records shared a timestamp; current resolution follows append order",
+    "an H-11 session could otherwise inherit the ordinary twelve-hour lifetime and survive beyond the approved session or share-link window",
+    "legacy real-email raters without an explicit purpose could otherwise be treated as ordinary non-H-11 identities",
+    "a synthetic .invalid identity could otherwise be mislabeled as a qualified human identity",
+    "the same gate could otherwise have multiple simultaneously valid unused invitations",
+    "replacement issuance could otherwise create a second valid token while another replacement remained live",
+    "an active session could otherwise coexist with a newly issued invitation",
+    "share-link freshness was initially represented only by an operator checkbox rather than a structured creation timestamp",
+    "the operator-entered release SHA was initially format-checked but not matched to the exact hosted runtime commit",
+    "superseding a gate initially invalidated future authentication logically but did not append an explicit session-revocation event",
+    "qualified-human names and contact emails were initially persisted in an append-only ledger, conflicting with the approved direct-identifier deletion policy"
+  ],
+  "validation": {
+    "workflow_run_id": 31160642510,
+    "workflow_name": "Metaphilosophy authenticated staging gate",
+    "run_number": 72,
+    "head_sha": "d9d6ea230a76bae31ea0747dee1d023cb2777a97",
+    "status": "success",
+    "jobs": {
+      "contracts_and_synthetic_rehearsal": "success",
+      "disposable_postgres_persistence_rehearsal": "success",
+      "rendered_chromium_rehearsal": "success"
+    },
+    "checks": [
+      "staging and compatibility syntax",
+      "explicit current-contract assertions for V2, share-link timestamps, exact-release binding, active-session protection, dynamic gate authentication, participant pseudonyms, transient contact validation, and non-persistence",
+      "staging contract verifier",
+      "focused H-11 access-gate, human-workflow, and hosted-gateway tests",
+      "complete repository test suite",
+      "ordinary public build excludes the staging shell",
+      "designated release-preview and explicit controlled-staging builds include all participant-readiness assets",
+      "deterministic synthetic lifecycle rehearsal",
+      "named support incident tabletop",
+      "PostgreSQL restart, chain readback, backup, and exact second-database restore",
+      "rendered Chromium two-participant lifecycle with V2 access gates, pseudonymous identities, contact-email non-persistence, integrated consent and debrief, correction, withdrawal, adjudication, private export, public-safe export, desktop, narrow-mobile, final-confirmation, and keyboard-focus checks"
+    ],
+    "playwright_last_run": {
+      "status": "passed",
+      "failed_tests": []
+    },
+    "artifacts": [
+      {
+        "id": 8986912517,
+        "name": "metaphilosophy-staging-contract-rehearsal-d9d6ea230a76bae31ea0747dee1d023cb2777a97",
+        "sha256": "e21a66af4d0af3c51e9da4ade71e5463ef100617df433ac702f2f26b0544ee86"
+      },
+      {
+        "id": 8986909327,
+        "name": "metaphilosophy-staging-postgres-d9d6ea230a76bae31ea0747dee1d023cb2777a97",
+        "sha256": "5139456bce0bff184e7153795d451732ca65df13c1923d2641c3901d3a47cf99"
+      },
+      {
+        "id": 8986946570,
+        "name": "metaphilosophy-staging-browser-d9d6ea230a76bae31ea0747dee1d023cb2777a97",
+        "sha256": "c3848beecf263e99d217b7696f3fe40cb8dc53de168a89b7be14d33fea5e1f3a"
+      }
+    ]
+  },
+  "remaining_required_human_and_hosted_evidence": [
+    "separate owner decision before advancing the protected release branch",
+    "deployment of the exact approved successor to the protected staging environment",
+    "fresh signed-out or incognito external protected-access preflight on that exact deployment",
+    "recipient-specific screening and affirmative final consent",
+    "two qualified human H-11 sessions",
+    "rubric-comprehension pass for both participants",
+    "no unresolved P0 or P1 defect",
+    "H-11 completion record",
+    "Ellen Sun H-12 operational-readiness sign-off"
+  ],
+  "release_boundary": {
+    "successor_candidate_deployed": false,
+    "accepted_hosted_release_unchanged": true,
+    "participant_share_link_created": false,
+    "participant_application_invitation_created": false,
+    "outbound_participant_access_message_sent": false,
+    "manual_signed_out_external_access_preflight_required_before_access": true,
+    "research_ratings_authorized": false
+  }
+}
