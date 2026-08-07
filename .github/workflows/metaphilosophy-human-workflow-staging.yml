@@ -123,6 +123,15 @@ jobs:
           node --check e2e/participant-readiness.spec.mjs
           node --check e2e/staging.playwright.config.mjs
 
+      - name: Assert current H-11 access-control contract
+        run: |
+          grep -q 'H11-ACCESS-GATE-2026-08-07-V2' src/staging-service.mjs
+          grep -q 'shareLinkCreatedAt' src/staging-service.mjs
+          grep -q 'h11_release_sha_mismatch' src/staging-service.mjs
+          grep -q 'h11_active_session_exists' src/staging-service.mjs
+          grep -q 'activeSessionMatchesCurrentAccessGate' src/staging-service.mjs
+          grep -q 'H11-ACCESS-GATE-2026-08-07-V2' e2e/human-workflow-staging.spec.mjs
+
       - name: Verify staging contracts
         run: npm run verify:staging
 
