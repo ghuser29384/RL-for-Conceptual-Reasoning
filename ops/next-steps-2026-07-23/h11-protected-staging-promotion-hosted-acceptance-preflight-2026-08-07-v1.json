@@ -1,0 +1,132 @@
+{
+  "record_id": "H11-PROTECTED-STAGING-PROMOTION-HOSTED-ACCEPTANCE-PREFLIGHT-2026-08-07-V1",
+  "recorded_at": "2026-08-07T11:30:00Z",
+  "owner_approval": {
+    "approved": true,
+    "scope": "promote the exact narrow H-11 V2 candidate to protected staging for hosted acceptance and external-access preflight only",
+    "explicit_exclusions": [
+      "participant access",
+      "further outreach",
+      "payment",
+      "research ratings",
+      "production deployment",
+      "H-11 passage",
+      "H-12 sign-off",
+      "merger of the broader programme pull request"
+    ]
+  },
+  "promotion": {
+    "repository": "ghuser29384/RL-for-Conceptual-Reasoning",
+    "release_branch": "release/vercel-preview",
+    "pre_promotion_head": "fa1a53791877a0a4f051bf226816f643f62dfc6c",
+    "pre_promotion_backup_branch": "backup/release-vercel-preview-before-h11-20260807",
+    "narrow_h11_product_commit": "9456b7ef198da9b0d409e725d807060e3860d8d2",
+    "hosted_acceptance_v3_successor_commit": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "current_release_branch_head": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "production_or_main_changed": false,
+    "broader_programme_pr_merged": false
+  },
+  "hosted_acceptance_infrastructure": {
+    "supabase_project": "zpnbshgrscbfelpychhn",
+    "schema_version": 4,
+    "purpose": "synthetic_rehearsal_only",
+    "research_ratings_authorized": false,
+    "acceptance_edge_function": {
+      "slug": "metaphilosophy-staging-acceptance",
+      "version": 2,
+      "status": "ACTIVE",
+      "custom_vercel_oidc_verification": true,
+      "platform_jwt_verification": false,
+      "deployment_sha256": "507019807ae724c2ed1acdab2b8ac92bfcb26bec91f219af55064f86808c9d2d"
+    },
+    "restore_policy": "preserve the prior independently restored chain as an immutable exact prefix, require a prior passing report anchor, and verify the current primary as a strict append-only extension without deleting or rewriting evidence"
+  },
+  "vercel_deployment": {
+    "project_id": "prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ",
+    "team_id": "team_ySu6sF3Uho1E1GnJtCQPVEuJ",
+    "deployment_id": "dpl_EUCcwjGtZboefTtFetQYmW1x8UpY",
+    "deployment_hostname": "rlhf-conceptual-reasoning-adyn2cd28-ellen-s.vercel.app",
+    "exact_commit": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "environment": "preview",
+    "region": "iad1",
+    "state": "READY",
+    "ready_at_epoch_ms": 1786101367362,
+    "production_target": false
+  },
+  "hosted_acceptance": {
+    "status": "pass",
+    "report_id": "2278f273-7fd0-4dba-8c54-30c164b57f43",
+    "report_kind": "protected-hosted-synthetic-lifecycle-v3",
+    "exact_release_sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "acceptance_run_id": "7ec3ddf2-479b-43a6-8361-f6be2daf20a4",
+    "created_at": "2026-08-07T10:58:22.136931Z",
+    "preserved_prior_events": 206,
+    "appended_run_events": 102,
+    "total_primary_events": 308,
+    "restored_prefix_events": 206,
+    "current_unrestored_append_only_suffix_events": 102,
+    "prior_primary_head_hash": "9a13c2ef2803386b1578e789ce0b3bae0d5533d4f2c6aa7802f1af8966f039ce",
+    "current_primary_head_hash": "03557780c8dd2d9f9d5d94797884462d16e6e9238ecfdbdc823588b743e0ff65",
+    "canonical_backup_sha256": "9660ff8d849088f8ae36e6ea4333c3bb10c7ce7d15be2bf31894d0396d4a4842",
+    "restore_mode": "previous_exact_restore_prefix_plus_verified_append_only_extension",
+    "sequence_gap_count": 0,
+    "previous_hash_mismatch_count": 0,
+    "duplicate_event_id_count": 0,
+    "duplicate_event_hash_count": 0,
+    "research_ratings_authorized": false,
+    "real_person_contacted": false,
+    "outbound_message_sent": false,
+    "research_rating_collected": false,
+    "payment_promised_or_made": false,
+    "production_changed": false,
+    "remote_bootstrap_enabled": false
+  },
+  "runtime_observability": {
+    "error_or_fatal_logs_in_two_hour_window": 0,
+    "http_5xx_logs_in_two_hour_window": 0
+  },
+  "external_access_preflight": {
+    "signed_out_protection_boundary": "pass",
+    "observed_request": "GET /staging/ on the exact immutable deployment hostname",
+    "observed_status": 302,
+    "redirect_target_class": "Vercel SSO",
+    "observed_security_headers": {
+      "cache_control": "no-store, max-age=0",
+      "x_frame_options": "DENY",
+      "x_robots_tag": "noindex",
+      "strict_transport_security_present": true
+    },
+    "temporary_share_url_created": true,
+    "share_url_or_token_persisted_in_this_record": false,
+    "share_url_sent_to_a_participant": false,
+    "authenticated_external_page_and_api_fetch": "blocked_by_tooling",
+    "tooling_limitation": "The available Vercel fetch connector repeatedly returned the initial SSO redirect and did not preserve or complete the browser cookie exchange. The general container runtime also had no external DNS. Therefore this record does not claim that an ordinary incognito browser completed the authenticated page and API journey.",
+    "manual_browser_check_required": true,
+    "manual_check_scope": [
+      "open a fresh temporary share URL for the exact immutable deployment in a normal signed-out or incognito browser",
+      "confirm /staging/ renders the H-11 V2 candidate rather than an SSO loop or error page",
+      "confirm /api/staging?action=health returns the exact release SHA, preview branch, schema-v4 persistence, and researchRatingsAuthorized=false",
+      "confirm no operator identity, other participant identity, assignment, invitation token, or protected item is exposed"
+    ]
+  },
+  "authorization_boundary_after_promotion": {
+    "participant_access_authorized": false,
+    "participant_identity_created": false,
+    "participant_share_link_sent": false,
+    "participant_application_invitation_created": false,
+    "further_outreach_authorized": false,
+    "payment_authorized": false,
+    "research_ratings_authorized": false,
+    "production_deployment_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "broader_programme_pr_merge_authorized": false
+  },
+  "disposition": {
+    "hosted_acceptance": "pass",
+    "signed_out_protection": "pass",
+    "authenticated_external_browser_preflight": "manual completion required",
+    "participant_access": "blocked",
+    "next_action": "complete the exact immutable deployment in a normal signed-out or incognito browser, then record the result before any recipient-specific access preparation"
+  }
+}
