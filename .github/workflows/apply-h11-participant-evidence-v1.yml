@@ -76,11 +76,13 @@ jobs:
           npm run smoke:server
           npm run tabletop:staging
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright test runner and Chromium
+        run: |
+          npm install --no-save --no-package-lock @playwright/test
+          npx playwright install --with-deps chromium
 
       - name: Run rendered Chromium workflow
-        run: npx playwright test --config e2e/staging.playwright.config.mjs
+        run: npx playwright test --config=e2e/staging.playwright.config.mjs
 
       - name: Upload temporary evidence
         if: always()
