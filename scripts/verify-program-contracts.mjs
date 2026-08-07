@@ -82,8 +82,9 @@ assert.deepEqual(panelReport.budget, {
 assert.match(calculator, /remainderOrder/);
 assert.match(calculator, /owner_approved_early_closure/);
 
-assert.match(closedPage, /The July 2026 intake window has closed\./);
-assert.match(closedPage, /No deadline or paid assignment is currently being offered/);
+assert.match(closedPage, /Research rating applications are closed\./);
+assert.match(closedPage, /There is no assignment to claim\./);
+assert.match(closedPage, /The first Metaphilosophy study has not begun\./);
 assert.doesNotMatch(closedPage, /Submit calibration/);
 
 const expectedClosedSources = ["/contribute", "/contribute/", "/reviewers", "/reviewers/", "/reviewers/index.html"];
