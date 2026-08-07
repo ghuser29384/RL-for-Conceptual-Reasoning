@@ -8,7 +8,7 @@ import {
   isKnownNonRuntimePath,
 } from "../scripts/vercel-ignore-build.mjs";
 
-test("only the designated release-preview branch may deploy", () => {
+test("only the designated release-preview branch is eligible through the ignored-build classifier", () => {
   assert.deepEqual(ALLOWED_VERCEL_BRANCHES, [
     "release/vercel-preview",
   ]);
@@ -81,21 +81,19 @@ test("repository-only changes skip Vercel without weakening approved Preview bui
   );
 });
 
-test("vercel.json denies every branch except the designated Preview", async () => {
-  const config = JSON.parse(await readFile(new URL("../vercel.json", import.meta.url)));
+test("vercel.json opens main only for the audited public editorial release", async () => {
+  const [configText, index] = await Promise.all([
+    readFile(new URL("../vercel.json", import.meta.url), "utf8"),
+    readFile(new URL("../index.html", import.meta.url), "utf8"),
+  ]);
+  const config = JSON.parse(configText);
+
   assert.equal(config.git.deploymentEnabled["*"], false);
-  assert.equal(
-    Object.hasOwn(config.git.deploymentEnabled, "main"),
-    false,
-  );
-  assert.equal(
-    config.git.deploymentEnabled["release/vercel-preview"],
-    true,
-  );
-  assert.equal(
-    config.ignoreCommand,
-    "node scripts/vercel-ignore-build.mjs",
-  );
+  assert.equal(config.git.deploymentEnabled.main, true);
+  assert.equal(config.git.deploymentEnabled["release/vercel-preview"], true);
+  assert.equal(config.buildCommand, "npm run build");
+  assert.equal(Object.hasOwn(config, "ignoreCommand"), false);
+  assert.match(index, /name="metaphilosophy-release-candidate" content="mp-public-voice-20260806-r1"/u);
 });
 
 test("GitHub Actions performs QA but never creates automatic Vercel deployments", async () => {
