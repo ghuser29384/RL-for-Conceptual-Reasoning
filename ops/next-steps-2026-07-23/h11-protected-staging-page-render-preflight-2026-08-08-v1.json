@@ -1,0 +1,73 @@
+{
+  "record_id": "H11-PROTECTED-STAGING-PAGE-RENDER-PREFLIGHT-2026-08-08-V1",
+  "recorded_at": "2026-08-08T09:41:48Z",
+  "evidence_source": {
+    "kind": "owner_uploaded_screenshot",
+    "conversation_file_id": "file_00000000ff8c81f78c976e1b50157f5e",
+    "local_filename": "85095938-c91c-4b21-9127-d3304936320b.png",
+    "sha256": "828d76b93ff4fc1972f8115dbe1cc42525f2249b2189f34f657bfed3200caa78",
+    "pixel_dimensions": {
+      "width": 2048,
+      "height": 1152
+    },
+    "screenshot_persisted_in_repository": false,
+    "address_bar_visible": false,
+    "share_url_or_token_visible": false,
+    "browser_mode_independently_observable": false
+  },
+  "deployment_under_test": {
+    "deployment_id": "dpl_EUCcwjGtZboefTtFetQYmW1x8UpY",
+    "deployment_hostname": "rlhf-conceptual-reasoning-adyn2cd28-ellen-s.vercel.app",
+    "release_sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "release_branch": "release/vercel-preview",
+    "vercel_environment": "preview",
+    "production_target": false,
+    "binding_basis": "The screenshot was supplied directly in response to the owner-only request for visual evidence from this exact deployment. The hostname is not visible in the screenshot itself."
+  },
+  "visual_observations": {
+    "page_rendered": true,
+    "blank_page": false,
+    "sso_loop_visible": false,
+    "application_error_visible": false,
+    "brand_header": "Metaphilosophy Review · Controlled Staging",
+    "synthetic_only_badge_visible": true,
+    "invitation_required_state_visible": true,
+    "invitation_token_field_empty": true,
+    "operator_identity_exposed": false,
+    "participant_identity_exposed": false,
+    "assignment_exposed": false,
+    "invitation_token_exposed": false,
+    "protected_or_real_research_item_exposed": false
+  },
+  "evaluated_checks": {
+    "authenticated_page_render_visual_leg": "pass",
+    "h11_controlled_staging_shell_visually_confirmed": true,
+    "pre_redemption_empty_state_visually_confirmed": true,
+    "visual_identity_and_item_non_exposure": true,
+    "exact_url_visible_in_artifact": false,
+    "signed_out_or_incognito_context_confirmed": false
+  },
+  "authorization_boundary": {
+    "participant_access_authorized": false,
+    "participant_identity_created": false,
+    "participant_share_link_sent": false,
+    "participant_application_invitation_created": false,
+    "further_outreach_authorized": false,
+    "payment_authorized": false,
+    "research_ratings_authorized": false,
+    "production_deployment_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "broader_programme_pr_merge_authorized": false
+  },
+  "disposition": {
+    "hosted_acceptance": "pass",
+    "signed_out_protection_boundary": "pass",
+    "authenticated_external_api_health_leg": "pass",
+    "authenticated_external_page_render_visual_leg": "pass",
+    "browser_context_attestation": "pending",
+    "full_external_access_preflight": "pending",
+    "participant_access": "blocked",
+    "next_action": "Obtain an explicit owner attestation that this screenshot came from the exact deployment in a fresh signed-out or incognito/private window. No additional screenshot is required unless that attestation is false or uncertain."
+  }
+}
