@@ -1,0 +1,93 @@
+{
+  "record_id": "H11-PROTECTED-STAGING-EXTERNAL-ACCESS-PREFLIGHT-2026-08-08-V2",
+  "recorded_at": "2026-08-08T09:32:10Z",
+  "deployment_under_test": {
+    "deployment_id": "dpl_EUCcwjGtZboefTtFetQYmW1x8UpY",
+    "deployment_hostname": "rlhf-conceptual-reasoning-adyn2cd28-ellen-s.vercel.app",
+    "release_sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "release_branch": "release/vercel-preview",
+    "vercel_environment": "preview",
+    "production_target": false
+  },
+  "evidence_sources": {
+    "signed_out_protection_boundary": {
+      "status": "pass",
+      "basis": "Previously retained automated preflight on the exact immutable deployment: /staging/ redirected to Vercel SSO with no-store, frame denial, noindex, and HSTS."
+    },
+    "authenticated_api_health": {
+      "status": "pass",
+      "record_path": "ops/next-steps-2026-07-23/h11-protected-staging-manual-api-preflight-2026-08-08-v1.json",
+      "event_count": 308,
+      "chain_head": "03557780c8dd2d9f9d5d94797884462d16e6e9238ecfdbdc823588b743e0ff65",
+      "research_ratings_authorized": false
+    },
+    "authenticated_page_render": {
+      "kind": "owner_submitted_screenshot_and_attestation",
+      "screenshot_received": true,
+      "screenshot_committed_to_public_repository": false,
+      "screenshot_sha256": "c503e2eb73798ad5b4d51251ca2f6b104a9ac015f7ff1118df7b577da30c7d90",
+      "screenshot_media_type": "image/png",
+      "screenshot_bytes": 216896,
+      "screenshot_width_px": 2048,
+      "screenshot_height_px": 1149,
+      "owner_attestation_verbatim": "The page loaded without an SSO loop or application error. It displayed no operator identity, participant identity, assignment, invitation token, or protected research item.",
+      "visual_observations": [
+        "The page rendered the Metaphilosophy Review controlled-staging header.",
+        "The page displayed the Synthetic rehearsal only environment badge.",
+        "The invitation-required panel rendered successfully.",
+        "The panel displayed Open your assigned workspace, an empty invitation-token field, and Redeem invitation.",
+        "No operator identity was visible.",
+        "No participant identity was visible.",
+        "No assignment was visible.",
+        "No invitation token was visible.",
+        "No protected research item was visible.",
+        "No application-error or SSO-loop state was visible."
+      ],
+      "privacy_minimization": {
+        "browser_password_manager_overlay_visible": false,
+        "share_link_parameter_visible": false,
+        "invitation_token_visible": false,
+        "private_account_details_visible": false
+      },
+      "limitations": [
+        "The submitted screenshot does not show browser chrome or the address bar.",
+        "Exact-deployment attribution therefore rests on the owner following the directed immutable URL, the immediate conversational sequence, and the rendered content matching the exact H-11 V2 candidate.",
+        "A signed-out or incognito attestation is not required for this authenticated page-render leg because the signed-out Vercel SSO boundary was verified separately."
+      ]
+    }
+  },
+  "evaluated_checks": {
+    "signed_out_protection_boundary_passed": true,
+    "authenticated_external_api_health_passed": true,
+    "staging_page_rendered_without_sso_loop_or_application_error": true,
+    "h11_v2_candidate_visually_confirmed": true,
+    "no_operator_identity_exposed": true,
+    "no_participant_identity_exposed": true,
+    "no_assignment_exposed": true,
+    "no_invitation_token_exposed": true,
+    "no_protected_research_item_exposed": true,
+    "research_ratings_authorized_remains_false": true,
+    "share_or_invitation_secret_persisted_in_public_record": false
+  },
+  "authorization_boundary": {
+    "participant_access_authorized": false,
+    "participant_identity_created": false,
+    "participant_share_link_sent": false,
+    "participant_application_invitation_created": false,
+    "further_outreach_authorized": false,
+    "payment_authorized": false,
+    "research_ratings_authorized": false,
+    "production_deployment_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "broader_programme_pr_merge_authorized": false
+  },
+  "disposition": {
+    "signed_out_protection_leg": "pass",
+    "authenticated_external_api_health_leg": "pass",
+    "authenticated_external_page_render_leg": "pass",
+    "full_external_access_preflight": "pass",
+    "participant_access": "blocked_pending_acceptance_and_participant_specific_clearance",
+    "next_action": "Monitor the two already-sent private institutional forwarding requests. If a proposed participant accepts, complete the recipient-specific conflict, jurisdiction, institutional-policy, payment-eligibility, consent, scheduling, and support checks before creating any controlled identity, application invitation, or share-link access. Send no follow-up before 2026-08-14."
+  }
+}
