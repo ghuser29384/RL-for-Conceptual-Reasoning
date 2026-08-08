@@ -1,0 +1,60 @@
+{
+  "record_id": "H11-PROTECTED-STAGING-EXTERNAL-ACCESS-PREFLIGHT-CORRECTION-2026-08-08-V3",
+  "recorded_at": "2026-08-08T09:46:00Z",
+  "record_type": "append_only_correction",
+  "supersedes_for_disposition": "H11-PROTECTED-STAGING-EXTERNAL-ACCESS-PREFLIGHT-2026-08-08-V2",
+  "reason_for_correction": [
+    "The V2 record was timestamped before the screenshot supplied in the current conversation turn.",
+    "The V2 screenshot SHA-256 and pixel height do not match the screenshot actually supplied in the current turn.",
+    "The V2 record attributed an explicit owner attestation that was not included in the screenshot-only message.",
+    "The signed-out Vercel SSO boundary does not by itself prove that the temporary external share-link cookie exchange and authenticated page/API journey worked in a fresh signed-out or incognito browser."
+  ],
+  "controlling_screenshot_evidence": {
+    "conversation_file_id": "file_00000000ff8c81f78c976e1b50157f5e",
+    "filename": "85095938-c91c-4b21-9127-d3304936320b.png",
+    "sha256": "828d76b93ff4fc1972f8115dbe1cc42525f2249b2189f34f657bfed3200caa78",
+    "media_type": "image/png",
+    "width_px": 2048,
+    "height_px": 1152,
+    "address_bar_visible": false,
+    "browser_mode_visible": false,
+    "share_or_invitation_secret_visible": false,
+    "screenshot_committed_to_repository": false
+  },
+  "visual_findings": {
+    "page_rendered": true,
+    "sso_loop_visible": false,
+    "blank_page": false,
+    "application_error_visible": false,
+    "metaphilosophy_controlled_staging_header_visible": true,
+    "synthetic_rehearsal_only_badge_visible": true,
+    "invitation_required_state_visible": true,
+    "invitation_token_field_empty": true,
+    "operator_identity_exposed": false,
+    "participant_identity_exposed": false,
+    "assignment_exposed": false,
+    "invitation_token_exposed": false,
+    "protected_or_real_research_item_exposed": false
+  },
+  "combined_preflight_state": {
+    "signed_out_sso_protection_boundary": "pass",
+    "authenticated_api_health": "pass",
+    "authenticated_page_render_visual_content": "pass",
+    "fresh_signed_out_or_incognito_share_link_journey": "not_yet_attested",
+    "full_external_access_preflight": "pending"
+  },
+  "authorization_boundary": {
+    "participant_access_authorized": false,
+    "participant_identity_created": false,
+    "participant_share_link_sent": false,
+    "participant_application_invitation_created": false,
+    "further_outreach_authorized": false,
+    "payment_authorized": false,
+    "research_ratings_authorized": false,
+    "production_deployment_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "broader_programme_pr_merge_authorized": false
+  },
+  "next_action": "Obtain a one-sentence owner attestation that the supplied screenshot came from the exact temporary share link opened in a fresh signed-out or incognito/private browser. If affirmed, the full external-access preflight may be recorded as pass without another screenshot."
+}
