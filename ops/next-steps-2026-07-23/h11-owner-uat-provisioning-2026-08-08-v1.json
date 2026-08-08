@@ -1,0 +1,82 @@
+{
+  "record_id": "H11-OWNER-UAT-PROVISIONING-2026-08-08-V1",
+  "recorded_at": "2026-08-08T12:08:14Z",
+  "scope": "synthetic owner user-acceptance testing only",
+  "exact_protected_release": {
+    "release_sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "release_branch": "release/vercel-preview",
+    "deployment_id": "dpl_EUCcwjGtZboefTtFetQYmW1x8UpY",
+    "deployment_hostname": "rlhf-conceptual-reasoning-adyn2cd28-ellen-s.vercel.app",
+    "environment": "preview",
+    "production_target": false
+  },
+  "provisioned_resources": {
+    "identity": {
+      "id": "df4dd5c4-16fb-4994-aae1-5c18cc0d1de0",
+      "display_name": "Synthetic owner-UAT rater",
+      "role": "rater",
+      "purpose": "synthetic_automation",
+      "email_class": "non-deliverable .invalid synthetic address"
+    },
+    "position": {
+      "id": "synthetic-owner-uat-position-20260808-001",
+      "title": "Synthetic owner UAT: objection ranking as philosophical assistance",
+      "status": "synthetic_rehearsal_only"
+    },
+    "critiques": {
+      "count": 4,
+      "ids": [
+        "synthetic-owner-uat-critique-20260808-001",
+        "synthetic-owner-uat-critique-20260808-002",
+        "synthetic-owner-uat-critique-20260808-003",
+        "synthetic-owner-uat-critique-20260808-004"
+      ]
+    },
+    "assignment": {
+      "id": "df406ee6-ac64-4dde-9c09-3202c3d71318",
+      "kind": "initial",
+      "status": "assigned",
+      "packet_hash": "e002ed63e5d630395c18c3e9c37530f8adfb44f0b6fb6638ec62c5bfa933d7f2",
+      "rubric_version": "lmca-pilot-rubric-v2-2026-08-05"
+    },
+    "invitation": {
+      "id": "98412054-b145-44f7-b58d-94514731e122",
+      "single_use": true,
+      "used_at": null,
+      "revoked_at": null,
+      "expires_at": "2026-08-11T12:08:14Z",
+      "token_hash_sha256": "f8322d014f7bc6faf95066912f36bab7ea4e921d07b0f2f4e68721bcf1a4f74d",
+      "plaintext_token_persisted_in_repository": false
+    }
+  },
+  "append_only_write": {
+    "events_inserted": 12,
+    "starting_sequence": 308,
+    "ending_sequence": 320,
+    "starting_head_hash": "03557780c8dd2d9f9d5d94797884462d16e6e9238ecfdbdc823588b743e0ff65",
+    "ending_head_hash": "7dda57d8c33a569fdb2c69ae1d776dd4b95add7dda17c8888fddd3fae40f64da",
+    "sequence_gap_count": 0,
+    "previous_hash_mismatch_count": 0,
+    "duplicate_event_id_count": 0,
+    "duplicate_event_hash_count": 0
+  },
+  "verified_boundaries": {
+    "position_count": 1,
+    "critique_count": 4,
+    "assignment_status": "assigned",
+    "invitation_unused": true,
+    "invitation_unrevoked": true,
+    "research_ratings_authorized": false,
+    "real_research_item_present": false,
+    "real_research_rating_collected": false,
+    "external_participant_created": false,
+    "payment_committed_or_made": false,
+    "production_changed": false
+  },
+  "secret_handling": {
+    "temporary_vercel_share_url_persisted_in_repository": false,
+    "plaintext_invitation_token_persisted_in_repository": false,
+    "owner_receives_both only through the private project conversation": true
+  },
+  "next_action": "Ellen Sun redeems the single-use invitation on the exact protected preview and performs the structured owner-UAT on desktop plus a narrow-mobile viewport."
+}
