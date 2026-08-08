@@ -1,0 +1,85 @@
+{
+  "record_id": "H11-PROTECTED-STAGING-MANUAL-API-PREFLIGHT-2026-08-08-V1",
+  "recorded_at": "2026-08-08T04:02:03Z",
+  "evidence_source": {
+    "kind": "owner_observed_browser_response",
+    "description": "The owner pasted the parsed JSON response from /api/staging?action=health into the Metaphilosophy project conversation.",
+    "response_body_preserved_verbatim": true,
+    "http_status_observed": null,
+    "browser_mode_attested": null,
+    "screenshot_received": false,
+    "share_url_or_token_persisted": false
+  },
+  "deployment_under_test": {
+    "deployment_id": "dpl_EUCcwjGtZboefTtFetQYmW1x8UpY",
+    "deployment_hostname": "rlhf-conceptual-reasoning-adyn2cd28-ellen-s.vercel.app",
+    "release_sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "release_branch": "release/vercel-preview",
+    "vercel_environment": "preview",
+    "production_target": false
+  },
+  "observed_response": {
+    "ok": true,
+    "action": "health",
+    "data": {
+      "status": "ok",
+      "environment": "hosted_staging_oidc",
+      "persistence": "RemoteEventStore",
+      "chain": {
+        "ok": true,
+        "events": 308,
+        "headHash": "03557780c8dd2d9f9d5d94797884462d16e6e9238ecfdbdc823588b743e0ff65"
+      },
+      "release": {
+        "sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+        "branch": "release/vercel-preview",
+        "vercelEnvironment": "preview"
+      },
+      "researchRatingsAuthorized": false
+    }
+  },
+  "evaluated_checks": {
+    "authenticated_external_api_response_received": true,
+    "payload_parsed_as_json": true,
+    "health_status_ok": true,
+    "hosted_oidc_environment_confirmed": true,
+    "remote_event_store_confirmed": true,
+    "chain_verification_ok": true,
+    "event_count_matches_retained_hosted_acceptance": true,
+    "chain_head_matches_retained_hosted_acceptance": true,
+    "exact_release_sha_matches": true,
+    "release_branch_matches": true,
+    "preview_environment_matches": true,
+    "research_ratings_authorized_remains_false": true
+  },
+  "remaining_unverified_checks": {
+    "staging_page_rendered_without_sso_loop_or_application_error": false,
+    "h11_v2_candidate_visually_confirmed": false,
+    "no_operator_identity_exposed": false,
+    "no_other_participant_identity_exposed": false,
+    "no_assignment_exposed": false,
+    "no_invitation_token_exposed": false,
+    "no_protected_research_item_exposed": false,
+    "signed_out_or_incognito_browser_context_confirmed": false
+  },
+  "authorization_boundary": {
+    "participant_access_authorized": false,
+    "participant_identity_created": false,
+    "participant_share_link_sent": false,
+    "participant_application_invitation_created": false,
+    "further_outreach_authorized": false,
+    "payment_authorized": false,
+    "research_ratings_authorized": false,
+    "production_deployment_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "broader_programme_pr_merge_authorized": false
+  },
+  "disposition": {
+    "authenticated_external_api_health_leg": "pass",
+    "authenticated_external_page_render_leg": "pending",
+    "full_external_access_preflight": "pending",
+    "participant_access": "blocked",
+    "next_action": "Obtain a screenshot of /staging/ from the same protected deployment and explicit confirmation that the page rendered the H-11 V2 candidate without exposing identities, assignments, invitation tokens, or protected research items."
+  }
+}
