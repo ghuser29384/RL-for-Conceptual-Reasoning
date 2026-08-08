@@ -1,0 +1,60 @@
+{
+  "record_id": "H11-PROTECTED-STAGING-PAGE-PREFLIGHT-REQUEST-2026-08-08-V1",
+  "recorded_at": "2026-08-08T09:33:00Z",
+  "deployment": {
+    "deployment_id": "dpl_EUCcwjGtZboefTtFetQYmW1x8UpY",
+    "hostname": "rlhf-conceptual-reasoning-adyn2cd28-ellen-s.vercel.app",
+    "release_sha": "659aeb1a7fded0ad6b695c45a06ade95baabf565",
+    "branch": "release/vercel-preview",
+    "environment": "preview",
+    "production_target": false
+  },
+  "already_passed": {
+    "hosted_acceptance": true,
+    "signed_out_sso_boundary": true,
+    "authenticated_api_health": true,
+    "research_ratings_authorized": false
+  },
+  "fresh_owner_only_share_access": {
+    "generated": true,
+    "expires_at": "2026-08-09T08:32:42Z",
+    "share_url_or_token_persisted": false,
+    "sent_to_participant": false
+  },
+  "connector_attempt": {
+    "status": "blocked_by_cookie_exchange",
+    "observed_status": 302,
+    "redirect_target_class": "Vercel SSO",
+    "cache_control": "no-store, max-age=0",
+    "x_frame_options": "DENY",
+    "x_robots_tag": "noindex",
+    "tooling_did_not_complete_authenticated_page_render": true
+  },
+  "remaining_manual_evidence": {
+    "required": true,
+    "browser_context": "fresh signed-out or incognito/private browser",
+    "required_artifact": "screenshot of the rendered /staging/ page with the URL bar cropped or the temporary token redacted",
+    "required_attestations": [
+      "the page rendered without an SSO loop, blank page, or application error",
+      "the page showed the H-11 V2 protected staging interface",
+      "no operator identity was exposed",
+      "no other participant identity was exposed",
+      "no assignment was exposed before invitation redemption",
+      "no invitation token was exposed",
+      "no protected or real research item was exposed"
+    ]
+  },
+  "authorization_boundary": {
+    "participant_access_authorized": false,
+    "participant_identity_created": false,
+    "participant_share_link_sent": false,
+    "participant_application_invitation_created": false,
+    "further_outreach_authorized": false,
+    "payment_authorized": false,
+    "research_ratings_authorized": false,
+    "production_deployment_authorized": false,
+    "h11_passed": false,
+    "h12_signed": false,
+    "broader_programme_pr_merge_authorized": false
+  }
+}
