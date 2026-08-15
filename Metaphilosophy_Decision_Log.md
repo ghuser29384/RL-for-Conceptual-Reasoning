@@ -141,3 +141,17 @@ This file preserves historical Metaphilosophy design decisions that no longer be
 - preserved_in: Metaphilosophy_Decision_Log.md
 - title: Move detailed historical revision log out of the main spec
 - rationale: RLHF93 pruned the main specification by moving detailed historical revision history into this decision log. The pruning keeps the main spec implementable while preserving auditability for accepted edits, rejected ideas, credences, and rationale.
+
+### mp-research-positioning-v1
+
+- decision_type: user_approved_strategy
+- decision_status: accepted
+- source_version: mp-research-positioning-v1
+- credence: 0.88
+- approval_date: 2026-08-15
+- approval_basis: explicit approval by Ellen Sun
+- current_spec_disposition: strategy_contract_in_docs
+- release_gate_impact: informs_future_pilot_design_no_immediate_authorization
+- preserved_in: ops/research-positioning-v1.json; docs/research-positioning-v1.md
+- title: Auditable expert judgment before a general model leaderboard
+- rationale: Metaphilosophy's primary direction is to build and study an auditable expert-judgment system for philosophical and conceptual reasoning, with expert disagreement, interpretation differences, revision, and judge robustness as the main research objects. An ordinary LMCA-style model leaderboard is explicitly excluded as the project's current core direction. The 48-critique study remains a measurement and workflow feasibility pilot; exact estimands, thresholds, and sample-size adequacy require a separate approved design amendment before research use.
