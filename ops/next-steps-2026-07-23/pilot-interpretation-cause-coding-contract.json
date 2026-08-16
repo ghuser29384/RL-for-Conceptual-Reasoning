@@ -1,0 +1,83 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-interpretation-cause-coding-contract-v1.schema.json",
+  "contract_id": "pilot-interpretation-cause-coding-contract-v1-2026-08-16",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_synthetic_only_no_coding_work_authorized",
+  "approved_endpoint_contract_id": "mp-pilot-endpoint-design-amendment-v1",
+  "owner_decision": {
+    "decision_id": "D2_interpretation_cause_coding_coverage",
+    "selected_option": "A",
+    "paired_fingerprints": 48,
+    "independent_adjudicators_per_pair": 2,
+    "initial_cause_code_records": 96,
+    "all_pairs_dual_coded": true
+  },
+  "blind_coding_policy": {
+    "visible_before_both_initial_codes_lock": [
+      "frozen position text",
+      "frozen critique text",
+      "two role-masked interpretation fingerprints"
+    ],
+    "hidden_before_both_initial_codes_lock": [
+      "numeric score vectors and score gaps",
+      "the other adjudicator's cause code or rationale",
+      "model judgments and acquisition strata",
+      "aggregate pilot results",
+      "adjudication outcomes",
+      "rater identity, seniority, and performance history"
+    ],
+    "initial_stage": "initial_interpretation_cause_code",
+    "initial_version": 1,
+    "initial_codes_immutable": true,
+    "reconciliation_may_not_overwrite_initial_codes": true,
+    "forced_consensus_prohibited": true
+  },
+  "cause_codes": [
+    "compatible_interpretations",
+    "material_position_conclusion_difference",
+    "material_critique_target_or_claim_difference",
+    "priced_in_disagreement",
+    "background_assumption_disagreement",
+    "score_calibration_or_rubric_allocation_only",
+    "substantive_object_level_disagreement",
+    "mixed_cause",
+    "unresolved_or_indeterminate"
+  ],
+  "reporting": {
+    "all_48_denominator_required": true,
+    "raw_dual_code_exact_agreement_required": true,
+    "raw_dual_code_disagreement_required": true,
+    "cause_code_counts_required": true,
+    "unresolved_cases_required": true,
+    "controlled_ids_text_and_rationales_public": false
+  },
+  "workload_boundary": {
+    "initial_cause_code_records": 96,
+    "lmca_source_time_per_cause_code_minutes": null,
+    "reason": "LMCA reports rating time but does not report time for a separate interpretation-cause coding task.",
+    "current_adjudication_reserve_usd": 100,
+    "reserve_changed_by_this_contract": false,
+    "reserve_shown_sufficient": false,
+    "workload_and_honorarium_reestimate_required_before_named_commitments": true
+  },
+  "implementation": {
+    "canonical_module": "scripts/pilot-interpretation-cause-coding.mjs",
+    "synthetic_tests": "test/pilot-interpretation-cause-coding.test.mjs",
+    "controlled_output_mode": "0600 outside repository working directory",
+    "no_real_packet_or_code_created_by_this_contract": true
+  },
+  "authorization_boundary": {
+    "authorizes_q_006b": false,
+    "authorizes_real_packet_generation": false,
+    "authorizes_coding_work": false,
+    "authorizes_rating_work": false,
+    "authorizes_participant_access": false,
+    "authorizes_recruitment": false,
+    "authorizes_research_start": false,
+    "authorizes_payment": false,
+    "authorizes_phase_2": false,
+    "authorizes_merge": false,
+    "authorizes_deployment": false
+  }
+}
