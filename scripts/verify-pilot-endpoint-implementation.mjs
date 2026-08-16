@@ -85,7 +85,7 @@ export async function verifyPilotEndpointImplementation(root = resolve(import.me
   assertAllFalse(analysis.authorization_boundary, "analysis authorization");
 
   assert.match(selfCheckModule, /export function generatePilotSelfCheckSelection/);
-  assert.match(selfCheckModule, /outcome-independent blind self-check/i);
+  assert.match(selfCheckModule, /outcomeIndependentSelection: true/);
   assert.match(selfCheckModule, /SELF_CHECK_RECORDS = 24/);
   assert.match(selfCheckModule, /selected_positions_per_core_rater: 2/);
   assert.match(selfCheckModule, /Controlled generation requires --controlled-output/);
