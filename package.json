@@ -12,7 +12,7 @@
     "dev:staging": "node src/staging-server.mjs",
     "serve:staging": "node src/staging-server.mjs",
     "build": "node scripts/build-static.mjs",
-    "test": "node --test",
+    "test": "node scripts/run-tests-with-summary.mjs",
     "verify:staging": "node scripts/verify-human-workflow-staging.mjs",
     "verify:staging:v4": "node scripts/verify-v4-staging-schema.mjs",
     "verify:hosted:preflight": "node scripts/verify-vercel-oidc-staging-gateway.mjs",
