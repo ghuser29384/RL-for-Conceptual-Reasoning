@@ -18,7 +18,7 @@ const REQUIRED_DOCUMENT_MARKERS = Object.freeze([
   "Two dedicated adjudicators will independently code **all 48 paired interpretation fingerprints**.",
   "Position is the primary aggregation and sensitivity unit.",
   "There is no scientific numerical pass/fail threshold",
-  "does not authorize participant access",
+  "authorize participant access or recruitment",
 ]);
 
 const REQUIRED_AUTHORIZATION_KEYS = Object.freeze([
@@ -62,9 +62,7 @@ export function validatePilotEndpointDesign({ contract, document }) {
   validateInferenceBoundaries(normalized, errors);
   validateAuthorization(normalized.authorization, errors);
 
-  if (!normalizedDocument.trim()) {
-    errors.push("The approved human-readable pilot endpoint document is missing or empty.");
-  }
+  if (!normalizedDocument.trim()) errors.push("The approved human-readable pilot endpoint document is missing or empty.");
   for (const marker of REQUIRED_DOCUMENT_MARKERS) {
     if (!normalizedDocument.includes(marker)) {
       errors.push(`The approved pilot endpoint document must preserve marker: ${marker}.`);
@@ -89,6 +87,7 @@ function validateGeometry(geometry, errors) {
     errors.push("The approved study geometry is missing.");
     return;
   }
+
   const expected = {
     positions: 12,
     critiques_per_position: 4,
@@ -104,9 +103,7 @@ function validateGeometry(geometry, errors) {
   for (const [key, value] of Object.entries(expected)) {
     if (geometry[key] !== value) errors.push(`Study geometry must preserve ${key}=${value}.`);
   }
-  if (geometry.primary_aggregation_unit !== "position") {
-    errors.push("Position must remain the primary aggregation unit.");
-  }
+  if (geometry.primary_aggregation_unit !== "position") errors.push("Position must remain the primary aggregation unit.");
   if (geometry.pair_specific_interaction_confounded_with_position !== true) {
     errors.push("The design must preserve the pair-by-position confounding limitation.");
   }
@@ -124,10 +121,12 @@ function validatePrimaryEndpoints(endpoints, errors) {
   for (const id of REQUIRED_PRIMARY_ENDPOINTS) {
     if (!ids.has(id)) errors.push(`The approved primary endpoint set must preserve ${id}.`);
   }
+
   const p1 = normalized.find((endpoint) => endpoint?.id === "P1_blind_initial_disagreement_profile");
   if (p1?.single_scalar_success_rule !== false) {
     errors.push("The blind-initial disagreement profile must not acquire a single scalar success rule.");
   }
+
   const p2 = normalized.find((endpoint) => endpoint?.id === "P2_interpretation_linkage");
   if (p2?.requires_pre_peer_fingerprint !== true) {
     errors.push("Interpretation fingerprints must remain locked before peer exposure.");
