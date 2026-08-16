@@ -290,7 +290,7 @@ test("preserves immutable initial codes and permits only separate non-overwritin
   assert.equal(validation.status, "pass", validation.errors.join("\n"));
 
   const invalid = structuredClone(reconciliations);
-  invalid[0].overwrite_initial_codes = true;
+  invalid[0].overwrites_initial_codes = true;
   invalid[0].replacement_code_ids = invalid[0].initial_code_ids;
   invalid[1].forced_consensus_prohibited = false;
   const failed = validateInterpretationCauseReconciliations(packetReport, dataset, invalid);
