@@ -1,0 +1,64 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-self-check-selection-contract-v1.schema.json",
+  "contract_id": "pilot-self-check-selection-contract-v1-2026-08-16",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_synthetic_only_no_selection_frozen",
+  "approved_endpoint_contract_id": "mp-pilot-endpoint-design-amendment-v1",
+  "owner_decision": {
+    "decision_id": "D1_blind_self_check_scope",
+    "selected_option": "B",
+    "selected_positions": 6,
+    "positions_per_topic_family": 1,
+    "positions_per_source_class": 3,
+    "selected_critiques_per_position": 2,
+    "both_original_raters_self_check_each_selected_critique": true,
+    "self_check_records": 24,
+    "self_checks_per_core_rater": 4,
+    "selected_positions_per_core_rater": 2
+  },
+  "selection_policy": {
+    "input": "frozen conflict-aware pilot assignment report only",
+    "position_subset_enumeration": "enumerate all six-position subsets and retain only sets with one position per topic, three per source class, and two selected positions per core rater",
+    "position_subset_selection": "choose the feasible canonical slot set with the lexicographically smallest SHA-256 rank under the frozen secret seed",
+    "critique_pair_selection": "within each selected position choose the canonical two-of-four critique pair with the lexicographically smallest SHA-256 rank under the frozen seed and position slot",
+    "input_order_independent": true,
+    "frozen_before_any_pilot_rating": true,
+    "forbidden_inputs": [
+      "human scores or score summaries",
+      "human disagreement or review routes",
+      "adjudication outcomes",
+      "model scores or judgments produced after rating begins"
+    ],
+    "exact_ids_and_seed": "private controlled manifest only",
+    "public_output": "hashes, counts, balance invariants, and authorization state only"
+  },
+  "self_check_record_policy": {
+    "stage": "blind_self_check",
+    "occurs_after_corresponding_initial_lock": true,
+    "occurs_before_peer_model_aggregate_cause_code_discussion_or_adjudication_exposure": true,
+    "predecessor_link_required": true,
+    "original_initial_record_immutable": true,
+    "object_level_reason_required_when_scores_change": true,
+    "may_replace_missing_initial": false,
+    "population_level_causal_checking_claim_authorized": false
+  },
+  "implementation": {
+    "canonical_module": "scripts/pilot-self-check-selection.mjs",
+    "synthetic_tests": "test/pilot-self-check-selection.test.mjs",
+    "controlled_output_mode": "0600 outside repository working directory",
+    "no_controlled_manifest_created_by_this_contract": true
+  },
+  "authorization_boundary": {
+    "authorizes_q_006b": false,
+    "authorizes_real_selection": false,
+    "authorizes_rating_work": false,
+    "authorizes_participant_access": false,
+    "authorizes_recruitment": false,
+    "authorizes_research_start": false,
+    "authorizes_payment": false,
+    "authorizes_phase_2": false,
+    "authorizes_merge": false,
+    "authorizes_deployment": false
+  }
+}
