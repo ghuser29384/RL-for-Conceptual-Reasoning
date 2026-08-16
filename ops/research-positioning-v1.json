@@ -1,0 +1,49 @@
+{
+  "contract_id": "mp-research-positioning-v1",
+  "status": "approved",
+  "approved_at": "2026-08-15",
+  "approved_by": "Ellen Sun",
+  "source_basis": {
+    "primary_prior_work": "Cooper et al., A dataset of rated conceptual arguments",
+    "relationship": "Metaphilosophy adapts LMCA's contextualized seven-dimensional critique-rating method without owning, relabelling, or merging LMCA data."
+  },
+  "primary_positioning": "Metaphilosophy is an auditable expert-judgment system for philosophical and conceptual reasoning.",
+  "primary_research_goal": "Study when expert judgments about contextualized arguments are stable, interpretable, revisable, and robust enough to support later datasets, evaluations, or training research.",
+  "research_questions": [
+    "How much do qualified experts disagree before discussion when they apply the same rubric to the same contextualized critique?",
+    "Which disagreements arise from interpretation, rubric allocation, calibration, or substantive philosophical judgment?",
+    "How do checking, discussion, and revision change judgments while preserving the original blind rating?",
+    "Which conclusions remain robust to rater identity, rater composition, context, timing, and aggregation rule?",
+    "What time, expertise, and operational controls are required to obtain judgments worth scaling?"
+  ],
+  "current_pilot_role": "The 48-critique study is a measurement and workflow feasibility pilot, not a validated benchmark or model-ranking release.",
+  "ordered_outputs": [
+    "An expert-judgment robustness and disagreement report.",
+    "An auditable, versioned pilot dataset if the judgment process proves sufficiently interpretable.",
+    "Secondary model-evaluation diagnostics only after the human-label foundation is assessed."
+  ],
+  "explicit_non_goals": [
+    "Build an ordinary LMCA-style model leaderboard as the project's core direction.",
+    "Treat expert ratings as objective ground truth about bottom-line philosophical conclusions.",
+    "Relabel LMCA ratings, counts, or records as Metaphilosophy outputs.",
+    "Present the 48-critique pilot as a validated benchmark or as evidence that a model has materially improved.",
+    "Optimize for a single pooled agreement statistic that conceals rater, position, or interpretation sensitivity."
+  ],
+  "pilot_design_constraints": [
+    "The primary estimands must concern expert-judgment robustness, disagreement, or interpretability rather than model ranking.",
+    "Blind initial ratings must remain immutable; later checks, discussions, and revisions must be linked as separate records.",
+    "The analysis must preserve position-level and rater-level variation and report unresolved disagreements.",
+    "Interpretation disagreements must be recorded separately from score differences wherever the evidence permits.",
+    "Any model ranking must remain a secondary diagnostic and must not become the pilot's headline result.",
+    "Exact estimands, aggregation rules, uncertainty intervals, decision thresholds, and sample-size adequacy must be frozen in a separate design amendment before research use."
+  ],
+  "authorization": {
+    "changes_public_copy": false,
+    "changes_current_pilot_endpoints": false,
+    "authorizes_participant_access": false,
+    "authorizes_recruitment": false,
+    "authorizes_research_start": false,
+    "authorizes_merge": false,
+    "authorizes_deployment": false
+  }
+}

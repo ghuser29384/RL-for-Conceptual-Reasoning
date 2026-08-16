@@ -1,0 +1,250 @@
+{
+  "contract_id": "mp-pilot-endpoint-design-amendment-v1",
+  "status": "approved_for_implementation_design_only",
+  "approved_at": "2026-08-16",
+  "approved_by": "Ellen Sun",
+  "strategy_contract_id": "mp-research-positioning-v1",
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "source_basis": {
+    "primary_methodological_source": "Cooper et al., A dataset of rated conceptual arguments, especially Section 2 and Appendices C, D, and F",
+    "draft_analysis": "docs/pilot-endpoint-design-amendment-v1-draft.md",
+    "evidence_ledger": "docs/pilot-endpoint-evidence-ledger-2026-08-15.md",
+    "approved_document": "docs/pilot-endpoint-design-amendment-v1.md"
+  },
+  "study_role": "finite expert-judgment robustness and workflow-feasibility pilot",
+  "study_geometry": {
+    "positions": 12,
+    "critiques_per_position": 4,
+    "paired_critique_units": 48,
+    "blind_initial_ratings_per_critique": 2,
+    "planned_blind_initial_ratings": 96,
+    "core_raters": 6,
+    "positions_per_rater": 4,
+    "ratings_per_rater": 16,
+    "unique_rater_pairs": 12,
+    "within_position_critique_comparisons": 72,
+    "primary_aggregation_unit": "position",
+    "pair_specific_interaction_confounded_with_position": true,
+    "critique_units_are_independent_top_level_observations": false,
+    "pairwise_comparisons_are_independent_top_level_observations": false
+  },
+  "primary_endpoints": [
+    {
+      "id": "P1_blind_initial_disagreement_profile",
+      "headline_snapshot": "accepted_blind_initial",
+      "critique_quantities": [
+        "absolute_overall_gap",
+        "absolute_centrality_times_strength_gap"
+      ],
+      "position_summary": "arithmetic mean across four paired critiques",
+      "pilot_summary": [
+        "all twelve position blocks",
+        "equal-position-weighted mean",
+        "position median",
+        "interquartile range",
+        "full range"
+      ],
+      "single_scalar_success_rule": false
+    },
+    {
+      "id": "P2_interpretation_linkage",
+      "requires_pre_peer_fingerprint": true,
+      "required_fields": [
+        "position_conclusion_summary_once_per_rater_position_before_first_sibling_lock",
+        "critique_target_summary_per_critique",
+        "priced_in_assessment_no_partly_yes_uncertain",
+        "interpretation_confidence_high_medium_low",
+        "background_assumptions_when_low_confidence_or_uncertain",
+        "position_ambiguity_flag",
+        "critique_ambiguity_flag",
+        "insufficient_context_flag"
+      ],
+      "cause_codes": [
+        "compatible_interpretations",
+        "material_position_conclusion_difference",
+        "material_critique_target_or_claim_difference",
+        "priced_in_disagreement",
+        "background_assumption_disagreement",
+        "score_calibration_or_rubric_allocation_only",
+        "substantive_object_level_disagreement",
+        "mixed_cause",
+        "unresolved_or_indeterminate"
+      ],
+      "coding_coverage": "all_48_pairs_dual_independent_blind"
+    },
+    {
+      "id": "P3_operational_feasibility_and_burden",
+      "components": [
+        "accepted blind initials over 96",
+        "complete paired critiques over 48",
+        "complete position blocks over 12",
+        "total and distributional active rating time",
+        "identity-free position and pseudonymous-rater time summaries",
+        "safe decline rejection replacement integrity verification self-check revision adjudication and unresolved counts",
+        "adjudicator active time where applicable"
+      ],
+      "lmca_five_to_fifteen_minute_range_is_a_pass_threshold": false
+    }
+  ],
+  "owner_decisions": {
+    "D1_blind_self_check_scope": {
+      "selected_option": "B",
+      "status": "approved",
+      "label": "balanced_24_rating_subsample",
+      "self_check_records": 24,
+      "selected_positions": 6,
+      "topic_families_represented": 6,
+      "positions_per_topic_family": 1,
+      "approved_source_classes": 2,
+      "positions_per_source_class": 3,
+      "selected_critiques_per_position": 2,
+      "self_checks_per_core_rater": 4,
+      "selected_positions_per_core_rater": 2,
+      "both_original_raters_self_check_each_selected_critique": true,
+      "selection_frozen_before_any_pilot_rating": true,
+      "selection_independent_of_observed_human_scores": true,
+      "selection_independent_of_human_disagreement": true,
+      "selection_independent_of_post_rating_model_outputs": true,
+      "exact_ids_and_seed_frozen_at_controlled_manifest_stage": true,
+      "stage": "blind_self_check",
+      "occurs_after_corresponding_initial_lock": true,
+      "occurs_before_peer_model_aggregate_cause_code_discussion_or_adjudication_exposure": true,
+      "initial_record_preserved": true,
+      "separate_predecessor_linked_record": true,
+      "object_level_reason_required_for_score_change": true,
+      "population_level_causal_checking_claim_authorized": false
+    },
+    "D2_interpretation_cause_coding_coverage": {
+      "selected_option": "A",
+      "status": "approved",
+      "paired_fingerprints": 48,
+      "independent_adjudicators_per_pair": 2,
+      "all_pairs_dual_coded": true,
+      "role_masked_rater_fingerprints": true,
+      "numeric_scores_and_gaps_hidden_until_both_initial_codes_lock": true,
+      "other_adjudicator_code_hidden_until_both_initial_codes_lock": true,
+      "model_judgments_and_acquisition_strata_hidden": true,
+      "aggregate_pilot_results_hidden": true,
+      "adjudication_outcomes_hidden": true,
+      "initial_codes_immutable": true,
+      "later_reconciliation_may_not_overwrite_initial_codes": true,
+      "report_all_48_denominator": true,
+      "report_raw_dual_code_agreement_and_disagreement": true,
+      "report_cause_counts_and_unresolved_cases": true,
+      "workload_and_honorarium_reestimate_required_before_named_commitments": true,
+      "changes_current_adjudication_reserve": false,
+      "authorizes_payment": false
+    }
+  },
+  "secondary_endpoints": [
+    {
+      "id": "S1_symmetric_lmca_style_discrepancy",
+      "definition": "(lmca_custom_weighted_loss(a,b) + lmca_custom_weighted_loss(b,a)) / 2",
+      "classification": "Metaphilosophy extension, not an LMCA source metric or ground-truth error",
+      "mixed_clarity_pairs_reported_separately": true
+    },
+    {
+      "id": "S2_within_position_ordering_robustness",
+      "unweighted_agreement_reported_first": true,
+      "weighted_pair_weight": "(abs(delta_overall_rater_a) + abs(delta_overall_rater_b)) / 2",
+      "forbidden_weight": "absolute difference between two-rater mean scores",
+      "aggregate_position_first": true
+    },
+    {
+      "id": "S3_stage_separated_change",
+      "stages": [
+        "blind_initial",
+        "blind_self_check",
+        "post_peer_or_post_evidence_revision",
+        "adjudicated_latest_accepted",
+        "unresolved"
+      ],
+      "causal_discussion_claim_authorized": false
+    },
+    {
+      "id": "S4_composition_and_aggregation_sensitivity",
+      "components": [
+        "leave_one_position_out_range",
+        "leave_one_rater_out_range_using_eight_unaffected_positions",
+        "equal-position mean",
+        "position median",
+        "conclusion stability table"
+      ],
+      "reliability_weighting": false
+    }
+  ],
+  "exploratory_only": [
+    "interval Krippendorff alpha",
+    "ICC or mixed-model variance decomposition",
+    "topic source length style-cue and order associations",
+    "authorized internal rater-offset diagnostics",
+    "initial-versus-latest comparisons",
+    "model diagnostics after human analysis freeze",
+    "formal resampling under an explicit exchangeability assumption"
+  ],
+  "uncertainty_policy": {
+    "headline_population_confidence_interval": false,
+    "headline_components": [
+      "all twelve position values",
+      "interquartile and full ranges",
+      "leave-one-position-out range",
+      "leave-one-rater-out range",
+      "mean-versus-median sensitivity"
+    ],
+    "position_cluster_bootstrap": "appendix_only_heuristic_if_used",
+    "null_hypothesis_p_values_for_primary_endpoints": false
+  },
+  "missing_data_policy": {
+    "imputation": false,
+    "self_check_or_revision_may_replace_missing_initial": false,
+    "valid_replacement": "new independently blinded initial rating by a pre-authorized eligible replacement rater with no peer or model exposure",
+    "complete_primary_report_requires": {
+      "paired_critiques": 48,
+      "complete_positions": 12,
+      "accepted_blind_initial_ratings": 96
+    },
+    "incomplete_label": "incomplete_pilot_descriptive_only",
+    "silent_item_replacement_after_observing_ratings": false
+  },
+  "decision_rules": {
+    "scientific_numerical_pass_fail_threshold": null,
+    "automatic_phase_2_authorization": false,
+    "automatic_public_benchmark_authorization": false,
+    "procedural_completion_requires": [
+      "96 accepted or validly replaced blind initial ratings",
+      "all required interpretation fingerprints locked",
+      "24 selected blind self-check records completed or validly replaced under the frozen subsample",
+      "all 48 paired fingerprints independently dual-coded",
+      "all required review cases closed or explicitly unresolved",
+      "all stages and causes preserved without overwriting initials",
+      "reproducible complete analysis and audit package"
+    ],
+    "existing_numeric_routes": "remain diagnostic_only_and_unapproved"
+  },
+  "model_evaluation": {
+    "headline_or_primary": false,
+    "permitted_only_after_human_analysis_freeze": true,
+    "classification": "secondary exploratory diagnostic"
+  },
+  "minimum_implementation_boundary": [
+    "keep this approved contract machine-verifiable",
+    "extend controlled rating schema storage service and UI for interpretation fingerprints and blind self-checks",
+    "add blind role-masked dual-adjudicator cause coding for all 48 pairs",
+    "correct ordering-weight cancellation and add position-first endpoints stage separation missingness and sensitivity",
+    "add complete synthetic fixtures and regression tests",
+    "update pilot analysis adjudication workload and methodology contracts without changing production claims"
+  ],
+  "authorization": {
+    "changes_current_pilot_workflow": false,
+    "changes_public_copy": false,
+    "approves_q_006b": false,
+    "freezes_protected_items": false,
+    "freezes_operational_thresholds": false,
+    "authorizes_participant_access": false,
+    "authorizes_recruitment": false,
+    "authorizes_research_start": false,
+    "authorizes_payment": false,
+    "authorizes_merge": false,
+    "authorizes_deployment": false
+  }
+}
