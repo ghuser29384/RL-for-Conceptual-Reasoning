@@ -10,7 +10,7 @@ export const SELF_CHECK_RECORDS = 24;
 export const SELF_CHECKS_PER_CORE_RATER = 4;
 export const SELF_CHECK_POSITIONS_PER_CORE_RATER = 2;
 
-const EXPECTED_TOPIC_FAMILIES = Object.freeze([
+const TOPICS = Object.freeze([
   "normative_ethics",
   "political_philosophy",
   "epistemology_and_philosophy_of_science",
@@ -18,11 +18,17 @@ const EXPECTED_TOPIC_FAMILIES = Object.freeze([
   "decision_theory_and_social_choice",
   "metaphilosophy_and_ai_governance",
 ]);
-const EXPECTED_SOURCE_CLASSES = Object.freeze([
+const SOURCES = Object.freeze([
   "public_synthetic_with_new_expert_ratings",
   "protected_public_domain_derived",
 ]);
-const FORBIDDEN_SELECTION_INPUT_KEYS = new Set([
+const CONTROLLED_AUTHORIZATION_FIELDS = Object.freeze([
+  "q_006b_approved",
+  "protected_manifest_frozen",
+  "self_check_selection_authorized",
+  "private_controlled_storage_confirmed",
+]);
+const FORBIDDEN_OUTCOME_KEYS = new Set([
   "rating",
   "ratings",
   "scores",
@@ -47,7 +53,7 @@ const FORBIDDEN_SELECTION_INPUT_KEYS = new Set([
   "route_results",
   "latest_accepted",
 ]);
-const FORBIDDEN_PUBLIC_KEYS = new Set([
+const FORBIDDEN_PUBLIC_IDENTIFIER_KEYS = new Set([
   "position_id",
   "position_ids",
   "critique_id",
@@ -55,15 +61,10 @@ const FORBIDDEN_PUBLIC_KEYS = new Set([
   "rater_id",
   "rater_ids",
   "slot_id",
-  "selected_positions",
-  "selected_critiques",
-  "self_check_records",
-]);
-const CONTROLLED_AUTHORIZATION_FIELDS = Object.freeze([
-  "q_006b_approved",
-  "protected_manifest_frozen",
-  "self_check_selection_authorized",
-  "private_controlled_storage_confirmed",
+  "self_check_record_id",
+  "selected_position_details",
+  "selected_critique_details",
+  "self_check_record_details",
 ]);
 
 export class PilotSelfCheckSelectionError extends Error {
@@ -124,32 +125,7 @@ export function validatePilotSelfCheckSelectionInput(endpointContract, input) {
     errors.push("mode must be simulation or controlled_generation.");
   }
   if (!nonEmptyString(input?.seed)) errors.push("seed is required.");
-
-  if (input?.mode === "simulation") {
-    if (input?.data_class !== "synthetic_test_fixture") {
-      errors.push("simulation mode is allowed only for synthetic_test_fixture data.");
-    }
-    for (const field of CONTROLLED_AUTHORIZATION_FIELDS) {
-      if (authorization[field] !== false) errors.push(`simulation authorization.${field} must remain false.`);
-    }
-    if (!emptyArray(authorization.approval_record_ids) || authorization.approved_at !== null) {
-      errors.push("simulation mode must not contain approval records or an approval timestamp.");
-    }
-  }
-  if (input?.mode === "controlled_generation") {
-    if (input?.data_class !== "private_controlled_selection_input") {
-      errors.push("controlled_generation requires private_controlled_selection_input data.");
-    }
-    for (const field of CONTROLLED_AUTHORIZATION_FIELDS) {
-      if (authorization[field] !== true) errors.push(`controlled authorization.${field} must equal true.`);
-    }
-    if (!Array.isArray(authorization.approval_record_ids) || authorization.approval_record_ids.length < 2) {
-      errors.push("controlled generation requires at least two versioned approval record IDs.");
-    }
-    if (!validIsoTimestamp(authorization.approved_at)) {
-      errors.push("controlled generation requires a valid authorization.approved_at timestamp.");
-    }
-  }
+  validateAuthorization(input?.mode, input?.data_class, authorization, errors);
 
   if (assignmentReport.report_version !== "pilot-assignment-v1") {
     errors.push("assignment_report must be a full pilot-assignment-v1 report.");
@@ -162,7 +138,7 @@ export function validatePilotSelfCheckSelectionInput(endpointContract, input) {
   }
   if (assignments.length !== 12) errors.push("assignment_report must contain exactly 12 position assignments.");
 
-  const outcomePaths = findKeys(assignments, FORBIDDEN_SELECTION_INPUT_KEYS);
+  const outcomePaths = findKeys(assignments, FORBIDDEN_OUTCOME_KEYS);
   if (outcomePaths.length) {
     errors.push(`assignment_report contains forbidden outcome-dependent fields: ${outcomePaths.join(", ")}.`);
   }
@@ -170,11 +146,11 @@ export function validatePilotSelfCheckSelectionInput(endpointContract, input) {
   const slotIds = new Set();
   const positionIds = new Set();
   const critiqueIds = new Set();
-  const topicCounts = new Map(EXPECTED_TOPIC_FAMILIES.map((topic) => [topic, 0]));
-  const sourceCounts = new Map(EXPECTED_SOURCE_CLASSES.map((sourceClass) => [sourceClass, 0]));
-  const allRaterIds = new Set();
+  const allRaters = new Set();
+  const topicCounts = new Map(TOPICS.map((topic) => [topic, 0]));
+  const sourceCounts = new Map(SOURCES.map((sourceClass) => [sourceClass, 0]));
 
-  for (const [index, assignment] of assignments.entries()) {
+  assignments.forEach((assignment, index) => {
     const prefix = `assignment_report.position_assignments[${index}]`;
     const slotId = cleanId(assignment?.slot_id);
     const positionId = cleanId(assignment?.position_id);
@@ -197,12 +173,12 @@ export function validatePilotSelfCheckSelectionInput(endpointContract, input) {
     if (raters.length !== 2 || new Set(raters).size !== 2 || raters.some((id) => !controlledId(id))) {
       errors.push(`${prefix}.rater_ids must contain exactly two unique controlled IDs.`);
     }
-    raters.forEach((id) => allRaterIds.add(id));
+    raters.forEach((id) => allRaters.add(id));
     if (!topicCounts.has(assignment?.topic_family)) errors.push(`${prefix}.topic_family is unsupported.`);
     else topicCounts.set(assignment.topic_family, topicCounts.get(assignment.topic_family) + 1);
     if (!sourceCounts.has(assignment?.source_class)) errors.push(`${prefix}.source_class is unsupported.`);
     else sourceCounts.set(assignment.source_class, sourceCounts.get(assignment.source_class) + 1);
-  }
+  });
 
   for (const [topic, count] of topicCounts) {
     if (count !== 2) errors.push(`assignment_report must contain exactly two positions in topic family ${topic}.`);
@@ -210,14 +186,14 @@ export function validatePilotSelfCheckSelectionInput(endpointContract, input) {
   for (const [sourceClass, count] of sourceCounts) {
     if (count !== 6) errors.push(`assignment_report must contain exactly six positions in source class ${sourceClass}.`);
   }
-  if (allRaterIds.size !== 6) errors.push("assignment_report must contain exactly six core raters.");
+  if (allRaters.size !== 6) errors.push("assignment_report must contain exactly six core raters.");
 
   return {
     status: errors.length ? "fail" : "pass",
     mode: input?.mode ?? null,
     data_class: input?.data_class ?? null,
     positions: assignments.length,
-    core_raters: allRaterIds.size,
+    core_raters: allRaters.size,
     errors,
   };
 }
@@ -234,28 +210,29 @@ export function generatePilotSelfCheckSelection(endpointContract, input) {
     .map(normalizeAssignment)
     .sort((left, right) => left.slot_id.localeCompare(right.slot_id));
   const feasiblePositionSets = [];
-
   for (const positionSet of combinations(assignments, SELF_CHECK_SELECTED_POSITIONS)) {
     if (!positionSetIsFeasible(positionSet)) continue;
-    const canonical = canonicalStringify(positionSet.map((assignment) => assignment.slot_id).sort());
+    const canonical = canonicalStringify(positionSet.map((row) => row.slot_id).sort());
     feasiblePositionSets.push({
       assignments: positionSet,
       canonical,
       rank: sha256(`${input.seed}\npositions\n${canonical}`),
     });
   }
-
   if (!feasiblePositionSets.length) {
     throw new PilotSelfCheckSelectionError(
       "No balanced six-position self-check subset satisfies topic, source, and per-rater incidence constraints.",
       { feasible_position_set_count: 0 },
     );
   }
-  feasiblePositionSets.sort((left, right) => left.rank.localeCompare(right.rank) || left.canonical.localeCompare(right.canonical));
+  feasiblePositionSets.sort(compareRanked);
   const selectedPositionSet = feasiblePositionSets[0];
 
   const selectedPositions = selectedPositionSet.assignments.map((assignment) => {
-    const critiquePairs = combinations([...assignment.critique_ids].sort(), SELF_CHECK_SELECTED_CRITIQUES_PER_POSITION)
+    const critiquePairs = [...combinations(
+      [...assignment.critique_ids].sort(),
+      SELF_CHECK_SELECTED_CRITIQUES_PER_POSITION,
+    )]
       .map((critiqueIds) => {
         const canonical = canonicalStringify(critiqueIds);
         return {
@@ -264,7 +241,7 @@ export function generatePilotSelfCheckSelection(endpointContract, input) {
           rank: sha256(`${input.seed}\ncritiques\n${assignment.slot_id}\n${canonical}`),
         };
       })
-      .sort((left, right) => left.rank.localeCompare(right.rank) || left.canonical.localeCompare(right.canonical));
+      .sort(compareRanked);
     return {
       ...assignment,
       selected_critique_ids: critiquePairs[0].critiqueIds,
@@ -291,11 +268,8 @@ export function generatePilotSelfCheckSelection(endpointContract, input) {
     }
   }
   selfCheckRecords.sort((left, right) => left.self_check_record_id.localeCompare(right.self_check_record_id));
-  const invariants = verifyPilotSelfCheckSelection(selectedPositions, selfCheckRecords);
-  const controlledBody = {
-    selected_positions: selectedPositions,
-    self_check_records: selfCheckRecords,
-  };
+  const invariants = verifySelection(selectedPositions, selfCheckRecords);
+  const controlledBody = { selected_positions: selectedPositions, self_check_records: selfCheckRecords };
 
   return {
     report_version: "pilot-self-check-selection-v1",
@@ -375,7 +349,7 @@ export function sanitizePilotSelfCheckSelectionReport(report) {
 }
 
 export function assertPublicPilotSelfCheckSelectionReport(report) {
-  const forbidden = findKeys(report, FORBIDDEN_PUBLIC_KEYS);
+  const forbidden = findKeys(report, FORBIDDEN_PUBLIC_IDENTIFIER_KEYS);
   if (forbidden.length) {
     throw new PilotSelfCheckSelectionError(`Public self-check summary exposes controlled fields: ${forbidden.join(", ")}`);
   }
@@ -399,24 +373,45 @@ export function assertPublicPilotSelfCheckSelectionReport(report) {
   return true;
 }
 
-function positionSetIsFeasible(positionSet) {
-  const topics = countBy(positionSet, (row) => row.topic_family);
-  if (topics.size !== EXPECTED_TOPIC_FAMILIES.length) return false;
-  if (EXPECTED_TOPIC_FAMILIES.some((topic) => topics.get(topic) !== 1)) return false;
-
-  const sources = countBy(positionSet, (row) => row.source_class);
-  if (EXPECTED_SOURCE_CLASSES.some((sourceClass) => sources.get(sourceClass) !== 3)) return false;
-
-  const raterPositionCounts = new Map();
-  for (const position of positionSet) {
-    for (const raterId of position.rater_ids) {
-      raterPositionCounts.set(raterId, (raterPositionCounts.get(raterId) ?? 0) + 1);
+function validateAuthorization(mode, dataClass, authorization, errors) {
+  if (mode === "simulation") {
+    if (dataClass !== "synthetic_test_fixture") errors.push("simulation mode is allowed only for synthetic_test_fixture data.");
+    for (const field of CONTROLLED_AUTHORIZATION_FIELDS) {
+      if (authorization[field] !== false) errors.push(`simulation authorization.${field} must remain false.`);
+    }
+    if (!emptyArray(authorization.approval_record_ids) || authorization.approved_at !== null) {
+      errors.push("simulation mode must not contain approval records or an approval timestamp.");
     }
   }
-  return raterPositionCounts.size === 6 && [...raterPositionCounts.values()].every((count) => count === 2);
+  if (mode === "controlled_generation") {
+    if (dataClass !== "private_controlled_selection_input") {
+      errors.push("controlled_generation requires private_controlled_selection_input data.");
+    }
+    for (const field of CONTROLLED_AUTHORIZATION_FIELDS) {
+      if (authorization[field] !== true) errors.push(`controlled authorization.${field} must equal true.`);
+    }
+    if (!Array.isArray(authorization.approval_record_ids) || authorization.approval_record_ids.length < 2) {
+      errors.push("controlled generation requires at least two versioned approval record IDs.");
+    }
+    if (!validIsoTimestamp(authorization.approved_at)) {
+      errors.push("controlled generation requires a valid authorization.approved_at timestamp.");
+    }
+  }
 }
 
-function verifyPilotSelfCheckSelection(selectedPositions, selfCheckRecords) {
+function positionSetIsFeasible(positionSet) {
+  const topics = countBy(positionSet, (row) => row.topic_family);
+  const sources = countBy(positionSet, (row) => row.source_class);
+  if (topics.size !== TOPICS.length || TOPICS.some((topic) => topics.get(topic) !== 1)) return false;
+  if (SOURCES.some((sourceClass) => sources.get(sourceClass) !== 3)) return false;
+  const raterCounts = new Map();
+  for (const row of positionSet) {
+    for (const raterId of row.rater_ids) raterCounts.set(raterId, (raterCounts.get(raterId) ?? 0) + 1);
+  }
+  return raterCounts.size === 6 && [...raterCounts.values()].every((count) => count === 2);
+}
+
+function verifySelection(selectedPositions, selfCheckRecords) {
   const errors = [];
   const topics = countBy(selectedPositions, (row) => row.topic_family);
   const sources = countBy(selectedPositions, (row) => row.source_class);
@@ -424,23 +419,21 @@ function verifyPilotSelfCheckSelection(selectedPositions, selfCheckRecords) {
   const positionsByRater = new Map();
   const recordKeys = new Set();
 
-  if (selectedPositions.length !== SELF_CHECK_SELECTED_POSITIONS) errors.push("Selection must contain exactly six positions.");
-  if (topics.size !== EXPECTED_TOPIC_FAMILIES.length || EXPECTED_TOPIC_FAMILIES.some((topic) => topics.get(topic) !== 1)) {
+  if (selectedPositions.length !== 6) errors.push("Selection must contain exactly six positions.");
+  if (topics.size !== 6 || TOPICS.some((topic) => topics.get(topic) !== 1)) {
     errors.push("Selection must contain exactly one position per topic family.");
   }
-  if (EXPECTED_SOURCE_CLASSES.some((sourceClass) => sources.get(sourceClass) !== 3)) {
+  if (SOURCES.some((sourceClass) => sources.get(sourceClass) !== 3)) {
     errors.push("Selection must contain exactly three positions per source class.");
   }
   for (const position of selectedPositions) {
-    if (position.selected_critique_ids.length !== SELF_CHECK_SELECTED_CRITIQUES_PER_POSITION) {
-      errors.push(`${position.slot_id} must contain exactly two selected critiques.`);
-    }
+    if (position.selected_critique_ids.length !== 2) errors.push(`${position.slot_id} must contain exactly two selected critiques.`);
     for (const raterId of position.rater_ids) {
       if (!positionsByRater.has(raterId)) positionsByRater.set(raterId, new Set());
       positionsByRater.get(raterId).add(position.position_id);
     }
   }
-  if (selfCheckRecords.length !== SELF_CHECK_RECORDS) errors.push("Selection must contain exactly 24 self-check records.");
+  if (selfCheckRecords.length !== 24) errors.push("Selection must contain exactly 24 self-check records.");
   for (const record of selfCheckRecords) {
     const key = `${record.position_id}|${record.critique_id}|${record.rater_id}`;
     if (recordKeys.has(key)) errors.push(`Duplicate self-check record key: ${key}.`);
@@ -448,27 +441,31 @@ function verifyPilotSelfCheckSelection(selectedPositions, selfCheckRecords) {
     if (record.required_stage !== SELF_CHECK_STAGE) errors.push("Every record must use the blind_self_check stage.");
     if (record.outcome_independent_selection !== true) errors.push("Every record must preserve outcome-independent selection provenance.");
   }
-  if (recordsByRater.size !== 6 || [...recordsByRater.values()].some((count) => count !== SELF_CHECKS_PER_CORE_RATER)) {
+  if (recordsByRater.size !== 6 || [...recordsByRater.values()].some((count) => count !== 4)) {
     errors.push("Every core rater must receive exactly four self-check records.");
   }
-  if (positionsByRater.size !== 6 || [...positionsByRater.values()].some((ids) => ids.size !== SELF_CHECK_POSITIONS_PER_CORE_RATER)) {
+  if (positionsByRater.size !== 6 || [...positionsByRater.values()].some((ids) => ids.size !== 2)) {
     errors.push("Every core rater must appear in exactly two selected positions.");
   }
-
   if (errors.length) throw new PilotSelfCheckSelectionError(`Generated self-check selection violated invariants:\n${errors.join("\n")}`);
+
   return {
     selected_positions: selectedPositions.length,
     selected_topic_families: topics.size,
     selected_positions_per_topic_family: 1,
-    selected_positions_per_source_class: Object.fromEntries(EXPECTED_SOURCE_CLASSES.map((sourceClass) => [sourceClass, sources.get(sourceClass)])),
+    selected_positions_per_source_class: Object.fromEntries(SOURCES.map((sourceClass) => [sourceClass, sources.get(sourceClass)])),
     selected_critiques: selectedPositions.reduce((sum, row) => sum + row.selected_critique_ids.length, 0),
-    selected_critiques_per_position: SELF_CHECK_SELECTED_CRITIQUES_PER_POSITION,
+    selected_critiques_per_position: 2,
     self_check_records: selfCheckRecords.length,
     core_raters: recordsByRater.size,
-    self_checks_per_core_rater: SELF_CHECKS_PER_CORE_RATER,
-    selected_positions_per_core_rater: SELF_CHECK_POSITIONS_PER_CORE_RATER,
+    self_checks_per_core_rater: 4,
+    selected_positions_per_core_rater: 2,
     both_original_raters_per_selected_critique: true,
   };
+}
+
+function compareRanked(left, right) {
+  return left.rank.localeCompare(right.rank) || left.canonical.localeCompare(right.canonical);
 }
 
 function normalizeAssignment(assignment) {
