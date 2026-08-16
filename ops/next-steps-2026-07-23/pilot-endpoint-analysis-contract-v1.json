@@ -1,0 +1,99 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/pilot-endpoint-analysis-contract-v1.schema.json",
+  "contract_id": "pilot-endpoint-analysis-contract-v1-2026-08-16",
+  "contract_version": 1,
+  "programme_id": "metaphilosophy-48-critique-pilot-v1-2026-07-30",
+  "status": "implementation_template_synthetic_only_no_research_authorization",
+  "approved_endpoint_contract_id": "mp-pilot-endpoint-design-amendment-v1",
+  "source_basis": {
+    "primary_reference": "Cooper et al., A dataset of rated conceptual arguments, especially Section 2 and Appendices B, C, D, and F",
+    "source_derived_rules": [
+      "seven 0-to-1 rating dimensions",
+      "centrality times strength as substantive impact",
+      "directional LMCA custom weighted loss",
+      "same-position comparison structure",
+      "blind initials and preserved original ratings"
+    ],
+    "metaphilosophy_extensions": [
+      "position-first absolute human-human gaps",
+      "symmetric average of both directional LMCA custom-loss directions",
+      "unweighted-first ordering robustness",
+      "average absolute within-rater gap as the optional ordering weight",
+      "leave-one-position and leave-one-rater finite-pilot sensitivity",
+      "balanced blind self-check stage",
+      "all-pair dual-blind interpretation-cause coding"
+    ]
+  },
+  "primary_endpoints": {
+    "P1": "twelve position-level mean absolute overall and centrality-times-strength gaps, followed by equal-position mean, median, interquartile range, and full range",
+    "P2": "all-48 paired interpretation-cause analysis from two immutable blind initial codes per pair",
+    "P3": "completion, active time, self-check, integrity, review, adjudication, and unresolved burden"
+  },
+  "secondary_endpoints": {
+    "S1": "symmetric two-direction LMCA-style discrepancy, labelled a Metaphilosophy extension rather than ground-truth error",
+    "S2": "unweighted ordering agreement first; optional weight equals the average of the two raters' absolute within-rater overall gaps",
+    "S3": "stage-separated blind initial, blind self-check, post-peer or post-evidence revision, adjudicated latest accepted, and unresolved records",
+    "S4": "leave-one-position, leave-one-rater, equal-position mean, and position-median sensitivity"
+  },
+  "complete_structure": {
+    "positions": 12,
+    "critiques": 48,
+    "blind_initial_ratings": 96,
+    "blind_self_check_records": 24,
+    "interpretation_cause_code_records": 96,
+    "core_raters": 6,
+    "dedicated_cause_coders": 2,
+    "position_is_primary_aggregation_unit": true
+  },
+  "inference_boundary": {
+    "population_valid_headline_confidence_interval": false,
+    "primary_null_hypothesis_tests": false,
+    "scientific_numerical_pass_threshold": null,
+    "imputation": false,
+    "reliability_weighting": false,
+    "public_rater_ranking": false,
+    "causal_checking_claim": false,
+    "causal_discussion_claim": false,
+    "primary_model_result": false,
+    "automatic_phase_2_decision": false
+  },
+  "privacy": {
+    "public_output_uses_generated_position_blocks": true,
+    "public_output_uses_generated_rater_blocks_for_deletion_sensitivity": true,
+    "public_output_contains_item_ids": false,
+    "public_output_contains_rater_ids": false,
+    "public_output_contains_rating_ids": false,
+    "public_output_contains_fingerprint_text": false,
+    "public_output_contains_rationales": false
+  },
+  "implementation": {
+    "canonical_analysis_module": "scripts/pilot-endpoint-analysis-v1.mjs",
+    "append_only_service": "src/approved-pilot-endpoint-service.mjs",
+    "base_event_service": "src/pilot-endpoint-service.mjs",
+    "task_first_form_models": "staging/pilot-endpoint-form.mjs",
+    "analysis_tests": "test/pilot-endpoint-analysis-v1.test.mjs",
+    "service_and_form_tests": "test/pilot-endpoint-service.test.mjs",
+    "selection_timing_tests": "test/approved-pilot-endpoint-service.test.mjs"
+  },
+  "workload_readback": {
+    "blind_self_check_records": 24,
+    "interpretation_cause_code_records": 96,
+    "lmca_source_time_per_cause_code_minutes": null,
+    "current_adjudication_reserve_usd": 100,
+    "current_reserve_changed": false,
+    "current_reserve_shown_sufficient": false,
+    "workload_and_honorarium_reestimate_required_before_named_commitments": true
+  },
+  "authorization_boundary": {
+    "authorizes_q_006b": false,
+    "authorizes_real_item_or_participant_data": false,
+    "authorizes_participant_access": false,
+    "authorizes_recruitment": false,
+    "authorizes_research_start": false,
+    "authorizes_payment": false,
+    "authorizes_public_benchmark": false,
+    "authorizes_phase_2": false,
+    "authorizes_merge": false,
+    "authorizes_deployment": false
+  }
+}
