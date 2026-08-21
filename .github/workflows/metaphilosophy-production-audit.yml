@@ -9,6 +9,13 @@ on:
         default: https://www.metaphilosophy.org
   schedule:
     - cron: "17 9 * * *"
+  pull_request:
+    paths:
+      - ".github/workflows/metaphilosophy-production-audit.yml"
+      - "ops/next-steps-2026-07-23/release-contract.json"
+      - "scripts/audit-production-release.mjs"
+      - "scripts/production-release-invariants.mjs"
+      - "test/production-release-invariants.test.mjs"
 
 permissions:
   contents: read

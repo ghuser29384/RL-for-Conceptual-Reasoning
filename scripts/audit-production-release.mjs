@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { assertClosedResearchIntakePage } from "./production-release-invariants.mjs";
+
 const root = resolve(import.meta.dirname, "..");
 const contract = JSON.parse(
   await readFile(resolve(root, "ops/next-steps-2026-07-23/release-contract.json"), "utf8"),
@@ -53,8 +55,7 @@ for (const critique of critiques) counts.set(critique.position_id, (counts.get(c
 assert.equal(counts.size, positions.length);
 for (const position of positions) assert.equal(counts.get(position.position_id), synthetic.expected.critiques_per_position);
 
-assert.match(intakeHtml, /The July 2026 intake window has closed\./);
-assert.doesNotMatch(intakeHtml, /Submit calibration/);
+assertClosedResearchIntakePage(intakeHtml);
 
 console.log(
   JSON.stringify(
@@ -65,6 +66,7 @@ console.log(
       positions: positions.length,
       critiques: critiques.length,
       domains: new Set(positions.map((item) => item.domain)).size,
+      researchIntake: "closed_not_started_zero_ratings",
       auditedAt: new Date().toISOString(),
     },
     null,
