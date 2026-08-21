@@ -22,9 +22,12 @@ async function loadFiles() {
 test("accepts the named, plain-language public editorial voice", async () => {
   const report = await readAndValidatePublicEditorialVoice(root);
   assert.equal(report.status, "pass", report.errors.join("\n"));
-  assert.equal(report.files_checked, 6);
+  assert.equal(report.files_checked, 7);
   assert.ok(report.author_mentions >= 5);
   assert.deepEqual(report.excluded_phrase_findings, []);
+  assert.deepEqual(report.lmca_attribution_findings, []);
+  assert.deepEqual(report.study_status_findings, []);
+  assert.equal(report.legacy_home_single_sourced, true);
 });
 
 test("rejects generic AI and platform-marketing diction", async () => {
@@ -60,4 +63,31 @@ test("rejects unsupported success claims", async () => {
   const report = validatePublicEditorialVoice(files);
   assert.equal(report.status, "fail");
   assert.ok(report.errors.some((error) => error.includes("unsupported outcome claim")));
+});
+
+test("rejects relabelling LMCA as a Metaphilosophy dataset", async () => {
+  const files = await loadFiles();
+  files["src/exact-reference-home.mjs"] += "<p>LMCA — a Metaphilosophy dataset.</p>";
+  const report = validatePublicEditorialVoice(files);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes("LMCA misattribution")));
+  assert.ok(report.lmca_attribution_findings.some((finding) => finding.path === "src/exact-reference-home.mjs"));
+});
+
+test("rejects claims that Metaphilosophy has already collected research ratings", async () => {
+  const files = await loadFiles();
+  files["reviewers/closed.html"] += "<p>Metaphilosophy has collected research ratings.</p>";
+  const report = validatePublicEditorialVoice(files);
+  assert.equal(report.status, "fail");
+  assert.ok(report.errors.some((error) => error.includes("false Metaphilosophy study-status claim")));
+  assert.ok(report.study_status_findings.some((finding) => finding.path === "reviewers/closed.html"));
+});
+
+test("rejects a second, stale implementation of the public homepage", async () => {
+  const files = await loadFiles();
+  files["src/public-home.mjs"] += "\nexport function staleHomepage() { return `Teaching AI to do philosophy.`; }\n";
+  const report = validatePublicEditorialVoice(files);
+  assert.equal(report.status, "fail");
+  assert.equal(report.legacy_home_single_sourced, false);
+  assert.ok(report.errors.some((error) => error.includes("one source of truth")));
 });
