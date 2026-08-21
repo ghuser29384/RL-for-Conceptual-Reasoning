@@ -339,8 +339,12 @@ assert.match(calculator, /pilot-honoraria-ledger-v1/);
 assert.match(calculator, /owner_approved_early_closure/);
 assert.doesNotMatch(calculator, /REQUIRED_INITIAL_RATINGS = 800/);
 
-assert.match(closedPage, /The July 2026 intake window has closed\./);
-assert.match(closedPage, /No deadline or paid assignment is currently being offered/);
+assert.match(closedPage, /Research rating applications are closed\./);
+assert.match(closedPage, /The first Metaphilosophy study has not begun\./);
+assert.match(closedPage, /There is no assignment to claim\./);
+assert.match(closedPage, /Zero research ratings have been collected\./);
+assert.doesNotMatch(closedPage, /July 2026 intake window/);
+assert.doesNotMatch(closedPage, /deadline or paid assignment/);
 assert.doesNotMatch(closedPage, /Submit calibration/);
 
 const expectedClosedSources = ["/contribute", "/contribute/", "/reviewers", "/reviewers/", "/reviewers/index.html"];
