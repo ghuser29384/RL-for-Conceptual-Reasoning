@@ -207,7 +207,7 @@ test("persists assignment packets, interpretation fingerprints, and predecessor-
     assert.match(chain.headHash, /^[a-f0-9]{64}$/);
 
     const reopenedStore = new FileEventStore({ filePath });
-    const reopenedService = new PilotEndpointWorkflowService({ reopenedStore, now: () => new Date("2026-08-18T00:00:00.000Z") });
+    const reopenedService = new PilotEndpointWorkflowService({ store: reopenedStore, now: () => new Date("2026-08-18T00:00:00.000Z") });
     const reopenedState = await reopenedService.state();
     assert.equal(reopenedState.assignmentPackets.length, 24);
     assert.equal(reopenedState.selfCheckSelection.records.length, 24);
