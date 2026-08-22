@@ -1,0 +1,229 @@
+{
+  "$schema": "https://www.metaphilosophy.org/schemas/bluedot-timing-price-validation-v1.schema.json",
+  "contract_id": "mp-bluedot-timing-price-validation-v1",
+  "contract_version": 1,
+  "status": "owner_approved_protocol_design_only_evidence_not_collected",
+  "approved_at": "2026-08-22",
+  "approved_by": "Ellen Sun",
+  "owner_decision": {
+    "decision": "B",
+    "description": "Keep the BlueDot request amount and individual allocations unset until role-specific workload timing and nonbinding price evidence are complete.",
+    "bluedot_request_amount_usd": null,
+    "individual_role_allocations_usd": null,
+    "automatic_amount_selection": false,
+    "later_owner_pricing_decision_required": true
+  },
+  "dependencies": {
+    "research_positioning_contract_id": "mp-research-positioning-v1",
+    "pilot_endpoint_contract_id": "mp-pilot-endpoint-design-amendment-v1",
+    "pilot_endpoint_implementation_head": "6a579c957b22719d52dc7c681a4107f517bb70eb",
+    "current_pilot_honoraria_plan_path": "ops/next-steps-2026-07-23/panel-honoraria-plan.json",
+    "current_pilot_honoraria_plan_id": "pilot-panel-honoraria-v1-2026-07-23",
+    "current_pilot_honoraria_plan_version": 4,
+    "current_pilot_honoraria_ceiling_usd": 500,
+    "current_adjudication_reserve_usd": 100,
+    "amends_current_pilot_honoraria_plan": false,
+    "equates_current_pilot_ceiling_with_bluedot_request": false
+  },
+  "objective": {
+    "primary": "Generate current role-specific workload evidence and post-task nonbinding price evidence before selecting any BlueDot request amount.",
+    "secondary": [
+      "Verify that timing instrumentation separates interpretation, scoring, self-check, cause-coding, reconciliation, calibration, orientation, and administration burden.",
+      "Detect scope or usability defects that would make a fixed honorarium misleading or unacceptable.",
+      "Produce a privacy-safe readback that supports a later explicit proceed, redesign, or pricing decision."
+    ]
+  },
+  "measurement_design": {
+    "material_class": "synthetic_only_for_protocol_rehearsal_and_workload_measurement",
+    "positions": 2,
+    "critiques_per_position": 4,
+    "paired_critique_units": 8,
+    "rater_roles": 2,
+    "position_conclusion_records": 4,
+    "critique_interpretation_records": 16,
+    "initial_rating_records": 16,
+    "blind_self_check_records": 4,
+    "self_check_selection_rule": "Before any timed work, select exactly one critique per position; both rater roles self-check both selected critiques.",
+    "cause_coder_roles": 2,
+    "initial_cause_code_records": 16,
+    "reconciliation_rehearsal_cases": 2,
+    "reconciliation_person_records": 4,
+    "reconciliation_rule": "Both cause-coder roles complete two fixed synthetic reconciliation vignettes after initial cause-code timing; actual study reconciliation is not performed.",
+    "same_people_may_fill_rater_and_cause_coder_roles": false,
+    "minimum_distinct_people_for_qualified_evidence": 4
+  },
+  "stages": {
+    "T0_synthetic_instrumentation_rehearsal": {
+      "purpose": "Verify counts, timers, interruption handling, public sanitization, and fail-closed readiness logic using synthetic identities and synthetic records.",
+      "may_use_owner_or_simulated_roles": true,
+      "counts_as_expert_usability_evidence": false,
+      "counts_as_scientific_evidence": false,
+      "counts_as_price_evidence": false,
+      "may_set_bluedot_request_amount": false,
+      "external_outreach_required": false
+    },
+    "T1_qualified_role_specific_timing_and_price_evidence": {
+      "purpose": "Measure actual burden with two qualified rater-role people and two separate qualified cause-coder-role people, then collect post-task nonbinding price expectations.",
+      "requires_separate_owner_authorization_before_contact_or_access": true,
+      "requires_current_participant_information_and_consent": true,
+      "requires_private_controlled_storage": true,
+      "counts_as_full_pilot_or_research_start": false,
+      "may_set_bluedot_request_amount_automatically": false
+    }
+  },
+  "timing_policy": {
+    "unit": "seconds",
+    "timing_method": "monotonic_active_timer_v1",
+    "required_stage_types": [
+      "orientation",
+      "calibration",
+      "position_conclusion",
+      "critique_interpretation",
+      "initial_scoring",
+      "blind_self_check",
+      "initial_cause_code",
+      "reconciliation_rehearsal",
+      "administration"
+    ],
+    "core_stage_expected_counts": {
+      "position_conclusion": 4,
+      "critique_interpretation": 16,
+      "initial_scoring": 16,
+      "blind_self_check": 4,
+      "initial_cause_code": 16,
+      "reconciliation_rehearsal": 4
+    },
+    "active_time_excludes": [
+      "declared pauses",
+      "unrelated interruptions",
+      "network or platform waiting time not requiring active attention",
+      "time before the person affirmatively starts a task",
+      "time after the person submits or abandons a task"
+    ],
+    "orientation_calibration_and_administration_reported_separately": true,
+    "no_imputation": true,
+    "incomplete_or_excluded_records_reported_not_replaced_silently": true,
+    "wall_clock_and_active_time_both_recorded": true,
+    "interruption_count_recorded": true
+  },
+  "qualified_evidence_requirements": {
+    "people_by_role": {
+      "rater": 2,
+      "cause_coder": 2
+    },
+    "role_separation_required": true,
+    "for_each_person": [
+      "qualification documented privately",
+      "participant information received",
+      "consent recorded",
+      "conflict and prior-exposure check complete",
+      "calibration complete",
+      "scope and nonbinding price question understood",
+      "post-task nonbinding price record complete"
+    ],
+    "timing_completeness": "Every required core-stage work unit is complete, non-imputed, and linked to one pseudonymous evidence person and one synthetic slot.",
+    "unresolved_p0_or_p1_defects_allowed": false,
+    "withdrawal_or_incomplete_role_allows_pricing_readiness": false
+  },
+  "price_evidence_policy": {
+    "currency": "USD",
+    "nonbinding": true,
+    "collected_after_timed_scope_completion": true,
+    "required_records": 4,
+    "required_response_fields": [
+      "scope_reviewed",
+      "post_task",
+      "nonbinding",
+      "response_status",
+      "minimum_acceptable_fixed_honorarium_usd",
+      "preferred_fixed_honorarium_usd",
+      "maximum_acceptable_workload_hours"
+    ],
+    "allowed_response_statuses": [
+      "usable_amount_evidence",
+      "declines_fixed_honorarium_model",
+      "needs_scope_revision"
+    ],
+    "usable_amount_evidence_requires_nonnegative_minimum_and_preferred_amounts": true,
+    "individual_amounts_public": false,
+    "small_cell_role_amount_ranges_public": false,
+    "payment_promise_created": false,
+    "grant_request_created": false
+  },
+  "readiness_states": {
+    "initial": "not_ready_to_price",
+    "allowed": [
+      "not_ready_to_price",
+      "synthetic_instrumentation_ready_not_price_evidence",
+      "blocked_by_unresolved_serious_defect",
+      "evidence_ready_for_owner_redesign_decision",
+      "evidence_ready_for_owner_pricing_decision"
+    ],
+    "synthetic_complete_state": "synthetic_instrumentation_ready_not_price_evidence",
+    "controlled_complete_usable_price_state": "evidence_ready_for_owner_pricing_decision",
+    "controlled_complete_decline_or_scope_revision_state": "evidence_ready_for_owner_redesign_decision",
+    "automatic_grant_amount_selection": false,
+    "automatic_honorarium_allocation": false,
+    "automatic_outreach_authorization": false,
+    "owner_decision_required_after_evidence": true
+  },
+  "privacy_and_publication": {
+    "private_evidence_contains_pseudonymous_ids_only": true,
+    "legal_names_and_payment_details_stored_separately": true,
+    "public_readback_omits": [
+      "person identifiers",
+      "item text",
+      "free-text rationales",
+      "individual timestamps",
+      "individual timing records",
+      "individual price amounts or ranges",
+      "payment details",
+      "jurisdictions",
+      "qualification documents"
+    ],
+    "public_readback_may_include": [
+      "aggregate task counts",
+      "role-by-stage timing summaries",
+      "number of complete nonbinding price records by role",
+      "unresolved serious-defect count",
+      "readiness state",
+      "claim and authorization boundaries"
+    ],
+    "minimum_public_cell_size": 4,
+    "public_output_is_not_participant_level_data": true
+  },
+  "claim_boundaries": [
+    "A completed T0 rehearsal is not expert usability validation.",
+    "A completed T0 rehearsal is not price evidence.",
+    "A completed T1 exercise is workload and price evidence, not a completed research study.",
+    "No calibration record is a Metaphilosophy research rating.",
+    "No result validates a benchmark, expert reliability, or model improvement.",
+    "No amount is selected until a later explicit owner decision.",
+    "No person is committed and no payment is promised by this protocol.",
+    "The existing USD 500 pilot ceiling is not automatically the BlueDot request."
+  ],
+  "implementation": {
+    "verifier": "scripts/verify-bluedot-timing-price-validation.mjs",
+    "readback_builder": "scripts/bluedot-timing-price-readback.mjs",
+    "synthetic_fixture": "test/fixtures/bluedot-timing-price-validation-synthetic.mjs",
+    "tests": "test/bluedot-timing-price-validation.test.mjs",
+    "human_readable_protocol": "docs/bluedot-timing-price-validation-protocol-v1.md",
+    "no_real_evidence_created_by_contract": true
+  },
+  "authorization_boundary": {
+    "authorizes_external_outreach": false,
+    "authorizes_participant_selection": false,
+    "authorizes_participant_access": false,
+    "authorizes_human_timing_collection": false,
+    "authorizes_price_acceptance_collection": false,
+    "authorizes_research_ratings": false,
+    "authorizes_research_start": false,
+    "authorizes_payment": false,
+    "authorizes_grant_submission": false,
+    "authorizes_grant_amount_selection": false,
+    "authorizes_publication_of_private_evidence": false,
+    "authorizes_merge": false,
+    "authorizes_deployment": false,
+    "authorizes_production_or_staging_data_mutation": false
+  }
+}
